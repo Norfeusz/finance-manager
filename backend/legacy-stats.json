@@ -1,0 +1,40 @@
+{
+  "totals": {
+    "zakupy codzienne": 8877.29,
+    "auta": 3239.6099999999998,
+    "dom": 939.21,
+    "wyjścia i szama do domu": 1683.93,
+    "rachunki": 5271.03,
+    "prezenty": 2248.63,
+    "pies": 1226.42,
+    "wpływy": 28524.75,
+    "jedzenie": 5946.58,
+    "zakupy": 101.93,
+    "słodycze": 580.54,
+    "chemia": 112.80000000000001,
+    "apteka": 407,
+    "alkohol": 632.05,
+    "higiena": 179.14000000000001,
+    "kwiatki": 24.990000000000002,
+    "subkonta": 4115
+  },
+  "counts": {
+    "zakupy codzienne": 7,
+    "auta": 7,
+    "dom": 7,
+    "wyjścia i szama do domu": 7,
+    "rachunki": 4,
+    "prezenty": 7,
+    "pies": 7,
+    "wpływy": 7,
+    "jedzenie": 6,
+    "zakupy": 7,
+    "słodycze": 6,
+    "chemia": 6,
+    "apteka": 6,
+    "alkohol": 6,
+    "higiena": 6,
+    "kwiatki": 5,
+    "subkonta": 3
+  }
+}
