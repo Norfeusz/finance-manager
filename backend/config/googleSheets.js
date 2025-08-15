@@ -1,6 +1,5 @@
 const { google } = require('googleapis');
 require('dotenv').config({ path: './.env' });
-
 // Zakres uprawnień, jakich potrzebujemy (pełny dostęp do arkuszy)
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 

@@ -1,3 +1,5 @@
+console.log('SERVER działa') 
+
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config({ path: './.env' });
@@ -22,3 +24,15 @@ app.use('/api/statistics', statisticsRoutes);
 app.listen(port, () => {
   console.log(`🚀 Serwer nasłuchuje na porcie ${port}`);
 });
+
+
+// połączenie z PostgresSQL
+const { Pool } = require('pg');
+const pool = new Pool({
+  user: 'postgres',
+  host: 'localhost',
+  database: 'manager_finansow',
+  password: process.env.PG_PASSWORD,
+  port: 1906,
+});
+module.exports = pool;

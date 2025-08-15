@@ -1,6 +1,8 @@
+
 const fs = require('fs');
 const path = require('path');
 const { getGoogleSheets } = require('../config/googleSheets');
+
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 // Mapa komórek dla starych arkuszy na podstawie Twoich wytycznych
