@@ -2,12 +2,21 @@ console.log('SERVER działa')
 
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config({ path: './.env' });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
+// Import tras
 const expenseRoutes = require('./routes/expenseRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const statisticsRoutes = require('./routes/statisticsRoutes');
+const accountRoutes = require('./routes/accountRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const monthRoutes = require('./routes/monthRoutes');
+const pool = require('./db/pool'); // Import połączenia z bazą danych
+const { initializeDatabase } = require('./scripts/initializeDb');
+const { createTables } = require('./scripts/createTables');
 
+// Inicjalizacja aplikacji Express
 const app = express();
 const port = process.env.PORT || 3001;
 
@@ -19,20 +28,25 @@ app.use(express.json());
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/accounts', accountRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/months', monthRoutes);
 
+// Inicjalizacja bazy danych i uruchomienie serwera
+async function startServer() {
+  try {
+    // 1. Utwórz tabele w bazie danych jeśli nie istnieją
+    await createTables();
+    // 2. Inicjalizuj podstawowe dane
+    await initializeDatabase();
+    // 3. Uruchom serwer
+    app.listen(port, () => {
+      console.log(`🚀 Serwer nasłuchuje na porcie ${port}`);
+    });
+  } catch (error) {
+    console.error('Błąd podczas uruchamiania serwera:', error);
+    process.exit(1);
+  }
+}
 
-app.listen(port, () => {
-  console.log(`🚀 Serwer nasłuchuje na porcie ${port}`);
-});
-
-
-// połączenie z PostgresSQL
-const { Pool } = require('pg');
-const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'manager_finansow',
-  password: process.env.PG_PASSWORD,
-  port: 1906,
-});
-module.exports = pool;
+startServer();

@@ -46,7 +46,14 @@ function CategoryDetailsModal({ isOpen, onClose, categoryName, transactions, onD
             alert('Transakcja zaktualizowana!');
             handleCloseEditModal();
             onClose(); // Zamknij główny modal
-            onDataChange(); // Odśwież dane
+            
+            // Sprawdź, czy onDataChange jest funkcją
+            if (typeof onDataChange === 'function') {
+                onDataChange(); // Odśwież dane
+            } else {
+                console.log('onDataChange nie jest funkcją podczas aktualizacji - odświeżanie strony');
+                window.location.reload(); // Fallback do odświeżania strony
+            }
         } else {
             throw new Error(result.message || 'Błąd aktualizacji');
         }
@@ -59,16 +66,22 @@ function CategoryDetailsModal({ isOpen, onClose, categoryName, transactions, onD
     const confirmDelete = window.confirm(`Czy na pewno chcesz usunąć transakcję: "${transaction.description || 'Brak opisu'}" o wartości ${formatCurrency(transaction.cost)}?`);
     if (confirmDelete) {
       try {
+        console.log('Usuwanie transakcji:', transaction);
         const response = await fetch('http://localhost:3001/api/expenses', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date: transaction.date, category: transaction.category, rowId: transaction.rowId }),
+          body: JSON.stringify({ id: transaction.id || transaction.rowId }), // Dodajemy fallback do rowId
         });
         const result = await response.json();
         if (response.ok) {
           alert('Transakcja usunięta pomyślnie.');
           onClose();
-          onDataChange();
+          if (typeof onDataChange === 'function') {
+            onDataChange();
+          } else {
+            console.log('onDataChange nie jest funkcją - odświeżanie strony');
+            window.location.reload(); // Fallback do odświeżania strony
+          }
         } else {
           throw new Error(result.message || 'Nie udało się usunąć transakcji.');
         }

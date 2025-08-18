@@ -37,7 +37,10 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
     const handleCategoryClick = (categoryKey) => {
         let relevantTransactions = [];
         if (subCategories.includes(categoryKey)) {
-            relevantTransactions = transactions.filter(t => t.category === 'zakupy codzienne' && t.description === categoryKey);
+            relevantTransactions = transactions.filter(t => {
+                return t.category === 'zakupy codzienne' && 
+                       (t.description === categoryKey || t.subcategory === categoryKey);
+            });
         } else {
             relevantTransactions = transactions.filter(t => t.category === categoryKey);
         }
@@ -58,11 +61,21 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
     
     const renderRow = (catKey) => {
         const currentValue = stats.currentMonth[catKey] || 0;
+        const prevValue = stats.previousMonth[catKey] || 0;
         const avgValue = stats.historicalAverage[catKey] || 0;
+        
+        // Kolor dla wartości bieżącego miesiąca
         let valueColor = '#333';
         if (currentValue > 0.005) {
             if (currentValue > avgValue) valueColor = '#dc3545';
             else valueColor = '#28a745';
+        }
+        
+        // Kolor dla wartości poprzedniego miesiąca
+        let prevValueColor = '#333';
+        if (prevValue > 0.005) {
+            if (prevValue > avgValue) prevValueColor = '#dc3545';
+            else prevValueColor = '#28a745';
         }
 
         const isClickable = currentValue > 0;
@@ -77,6 +90,9 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
                 >
                     {formatCurrency(currentValue)}
                 </td>
+                <td style={{ color: prevValueColor }}>
+                    {formatCurrency(prevValue)}
+                </td>
                 <td>{formatCurrency(avgValue)}</td>
             </tr>
         );
@@ -88,12 +104,12 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
                 <h2>Statystyki wydatków</h2>
                 <p className="subtitle">Średnia nie uwzględnia bieżącego miesiąca.</p>
                 <table>
-                    <thead><tr><th>Kategoria</th><th>Ten miesiąc</th><th>Średnio / msc</th></tr></thead>
+                    <thead><tr><th>Kategoria</th><th>Ten miesiąc</th><th>Poprzedni miesiąc</th><th>Średnio / msc</th></tr></thead>
                     <tbody>
-                        <tr className="main-category-header"><td colSpan="3">Zakupy codzienne</td></tr>
+                        <tr className="main-category-header"><td colSpan="4">Zakupy codzienne</td></tr>
                         {renderRow('zakupy codzienne')}
                         {subCategories.map(renderRow)}
-                        <tr className="main-category-header"><td colSpan="3">Pozostałe kategorie</td></tr>
+                        <tr className="main-category-header"><td colSpan="4">Pozostałe kategorie</td></tr>
                         {mainCategories.map(renderRow)}
                     </tbody>
                 </table>

@@ -46,7 +46,7 @@ CREATE INDEX idx_transactions_subcategory ON transactions(subcategory_id);
 CREATE INDEX idx_transactions_account ON transactions(account_id);
 
 -- Przykładowe dane startowe
-INSERT INTO accounts (name) VALUES ('Główne'), ('Oszczędnościowe'), ('Rachunki');
+INSERT INTO accounts (name) VALUES ('Wspólne'), ('Gotówka'), ('Oszczędnościowe'), ('Rachunki'), ('KWNR');
 INSERT INTO categories (name) VALUES ('Zakupy codzienne'), ('Opłaty'), ('Rozrywka'), ('Transport'), ('Zdrowie'), ('Inne');
 
 INSERT INTO subcategories (name, category_id) VALUES ('Jedzenie', 1), ('Chemia', 1), ('Dziecko', 1);

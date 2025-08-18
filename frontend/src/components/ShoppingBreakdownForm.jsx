@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import './ShoppingBreakdownForm.css';
 
 const subcategories = ['słodycze', 'chemia', 'apteka', 'alkohol', 'higiena', 'kwiatki'];
 
@@ -37,16 +38,18 @@ function ShoppingBreakdownForm({ totalCost, onSave, onCancel }) {
     
     return (
         <div className="breakdown-form">
-            <div className="summary">
+            <div className="summary" style={{ backgroundColor: 'white' }}>
                 <p>Koszt całkowity: <strong>{totalCost.toFixed(2)} zł</strong></p>
                 <p>Suma rozbicia: <strong style={{color: breakdownSum > totalCost ? 'red' : 'inherit'}}>{breakdownSum.toFixed(2)} zł</strong></p>
                 <p>Obliczony koszt jedzenia: <strong>{foodCost.toFixed(2)} zł</strong></p>
             </div>
-            <hr/>
-            <div className="breakdown-grid">
+            <hr style={{ backgroundColor: '#ddd', height: '2px', border: 'none' }}/>
+            <div className="breakdown-grid" style={{ backgroundColor: 'white' }}>
                 {subcategories.map(cat => (
-                    <div className="form-group" key={cat}>
-                        <label htmlFor={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}:</label>
+                    <div className="form-group" key={cat} style={{ backgroundColor: 'white', padding: '5px' }}>
+                        <label htmlFor={cat} style={{ backgroundColor: 'white' }}>
+                            {cat.charAt(0).toUpperCase() + cat.slice(1)}:
+                        </label>
                         <input 
                             type="text" 
                             id={cat} 
@@ -54,6 +57,7 @@ function ShoppingBreakdownForm({ totalCost, onSave, onCancel }) {
                             placeholder="np. 15,99 + 2,50"
                             value={costs[cat] || ''}
                             onChange={(e) => handleCostChange(cat, e.target.value)}
+                            style={{ backgroundColor: 'white', position: 'relative', zIndex: 9999 }}
                         />
                     </div>
                 ))}

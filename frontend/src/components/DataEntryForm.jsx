@@ -50,7 +50,18 @@ const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shopp
             </>
         ) : null}
         
-        <div className="form-group"><label htmlFor="account">Konto (obciążane):</label><select id="account" name="account" required><option value="wspólne">Wspólne</option><option value="Gabi">Gabi</option><option value="Norf">Norf</option><option value="Oszczędności">Oszczędności</option></select></div>
+                <div className="form-group">
+                    <label htmlFor="account">Konto (obciążane):</label>
+                    <select id="account" name="account" required>
+                        <option value="Wspólne">Wspólne</option>
+                        <option value="Gotówka">Gotówka</option>
+                        <option value="Oszczędnościowe">Oszczędnościowe</option>
+                        <option value="Rachunki">Rachunki</option>
+                        <option value="KWNR">KWNR</option>
+                        <option value="Gabi">Gabi</option>
+                        <option value="Norf">Norf</option>
+                    </select>
+                </div>
 
         <Modal isOpen={isShoppingModalOpen} onClose={() => setIsShoppingModalOpen(false)} title="Rozbicie Paragonu">
             <ShoppingBreakdownForm 
@@ -68,7 +79,8 @@ const IncomeFields = ({ incomeFrom, onFromChange, showAdvanceOption, advanceType
         <div className="form-group">
             <label htmlFor="toAccount">Na jakie konto?</label>
             <select id="toAccount" name="toAccount">
-                <option value="Główne">Główne</option>
+                <option value="Wspólne">Wspólne</option>
+                <option value="Gotówka">Gotówka</option>
                 <option value="Oszczędnościowe">Oszczędnościowe</option>
                 <option value="Rachunki">Rachunki</option>
                 <option value="KWNR">KWNR</option>
@@ -118,8 +130,8 @@ const IncomeFields = ({ incomeFrom, onFromChange, showAdvanceOption, advanceType
 );
 
 const TransferFields = () => {
-    const [fromAccount, setFromAccount] = useState('Główne');
-    const accountOptions = ['Główne', 'Oszczędnościowe', 'Rachunki', 'KWNR'];
+    const [fromAccount, setFromAccount] = useState('Wspólne');
+    const accountOptions = ['Wspólne', 'Gotówka', 'Oszczędnościowe', 'Rachunki', 'KWNR'];
     const defaultToAccount = accountOptions.find(acc => acc !== fromAccount);
 
     return (
@@ -186,7 +198,14 @@ function DataEntryForm({ onNewEntry }) {
         }
         payload = shoppingBreakdown.map(item => ({
             flowType: 'expense',
-            data: { ...commonData, mainCategory: 'zakupy codzienne', account: form.elements.account.value, cost: item.cost, subCategory: item.description, description: '', }
+            data: { 
+                ...commonData, 
+                mainCategory: 'zakupy codzienne', 
+                account: form.elements.account.value, 
+                cost: item.cost, 
+                subCategory: item.description, 
+                description: item.description, // Zapisujemy nazwę podkategorii również w description
+            }
         }));
     } else {
         let dataPayload = { ...commonData };

@@ -1,19 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import CollapsibleSection from './CollapsibleSection';
 import CategoryDetailsModal from './CategoryDetailsModal';
 import Modal from './Modal';
 import EditTransactionModal from './EditTransactionModal';
+import AccountBalances from './AccountBalances';
+import './StatisticsDashboard.css';
 
 function StatisticsDashboard({ transactions }) {
   const [modalInfo, setModalInfo] = useState({ isOpen: false, category: '', transactions: [] });
   const [incomeModal, setIncomeModal] = useState({ isOpen: false, transaction: null });
   const [editIncomeModal, setEditIncomeModal] = useState({ isOpen: false, transaction: null });
+  const [accountBalances, setAccountBalances] = useState([]);
+
+  // Pobierz stany kont z API
+  useEffect(() => {
+    const fetchAccountBalances = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/accounts/balances');
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+        const data = await response.json();
+        setAccountBalances(data);
+      } catch (err) {
+        console.error('Błąd pobierania stanów kont:', err);
+      }
+    };
+
+    fetchAccountBalances();
+  }, []);
 
   // Funkcja pomocnicza do formatowania waluty
   function formatCurrency(value) {
     if (typeof value !== 'number') value = Number(value);
     if (isNaN(value)) return '-';
     return value.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN', minimumFractionDigits: 2 });
+  }
+  
+  // Funkcja pomocnicza do formatowania daty
+  function formatDate(dateString) {
+    if (!dateString) return '-';
+    
+    // Sprawdź czy data jest w formacie ISO (z T i Z)
+    if (dateString.includes('T')) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('pl-PL', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
+    
+    // Jeśli data jest już w formacie YYYY-MM-DD, zwróć ją w formacie DD.MM.YYYY
+    const [year, month, day] = dateString.split('-');
+    if (year && month && day) {
+      return `${day}.${month}.${year}`;
+    }
+    
+    return dateString;
   }
 
   // Nowa logika: wpływy początkowe to pierwsze dwa wpływy z datą 1 danego miesiąca
@@ -54,12 +94,15 @@ function StatisticsDashboard({ transactions }) {
   const stats = {
     overallBalance: transactions.reduce((acc, t) => acc + (t.type === 'income' ? Number(t.cost || t.amount || 0) : t.type === 'expense' ? -Number(t.cost || 0) : 0), 0),
     accountBalances: transactions.reduce((acc, t) => {
-      const accName = t.toAccount || t.account || 'Główne';
+      const accName = t.toAccount || t.account || 'Wspólne';
       if (!acc[accName]) acc[accName] = 0;
       if (t.type === 'income') acc[accName] += Number(t.cost || t.amount || 0);
       if (t.type === 'expense') acc[accName] -= Number(t.cost || 0);
       return acc;
-    }, { 'Główne': 0, 'Oszczędnościowe': 0, 'Rachunki': 0 }),
+    }, { 'Wspólne': 0, 'Gotówka': 0, 'Oszczędnościowe': 0, 'Rachunki': 0, 'KWNR': 0 }),
+    // Obliczanie sumy wszystkich kont - na podstawie danych z tabeli account_balances
+    totalAccountsBalance: accountBalances.reduce((sum, account) => sum + parseFloat(account.current_balance || 0), 0),
+    // Bilans miesiąca - różnica między wpływami a wydatkami w danym miesiącu
     monthlyBalance: transactions.filter(t => t.type === 'income' || t.type === 'expense').reduce((acc, t) => acc + (t.type === 'income' ? Number(t.cost || t.amount || 0) : -Number(t.cost || 0)), 0),
     totalIncome: transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0),
     totalExpenses: transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.cost || 0), 0),
@@ -152,18 +195,23 @@ function StatisticsDashboard({ transactions }) {
         <div className="stats-grid">
           <div className="card">
             <h2>Główne Statystyki</h2>
-            <p><strong>Bilans całkowity:</strong> {formatCurrency(stats.overallBalance)}</p>
-            <p><strong>Stan kont:</strong></p>
-            <ul>
-              <li>Główne: {stats.accountBalances['Główne']}</li>
-              <li>Oszczędnościowe: {stats.accountBalances['Oszczędnościowe']}</li>
-              <li>Rachunki: {stats.accountBalances['Rachunki']}</li>
-            </ul>
+            <AccountBalances refreshKey={transactions.length} />
+            <div className="highlighted-stat">
+              <span className="label">Suma kont:</span>
+              <span className={`value ${stats.totalAccountsBalance >= 0 ? 'positive' : 'negative'}`}>
+                {formatCurrency(stats.totalAccountsBalance)}
+              </span>
+            </div>
           </div>
 
           <div className="card">
             <h2>Aktualny miesiąc</h2>
-            <p><strong>Bilans miesiąca:</strong> <span style={{color: stats.monthlyBalance >= 0 ? 'green' : 'red'}}>{formatCurrency(stats.monthlyBalance)}</span></p>
+            <div className="highlighted-stat">
+              <span className="label">Bilans miesiąca:</span>
+              <span className={`value ${stats.monthlyBalance >= 0 ? 'positive' : 'negative'}`}>
+                {formatCurrency(stats.monthlyBalance)}
+              </span>
+            </div>
             <hr/>
             <CollapsibleSection title={`Suma wpływów: ${formatCurrency(stats.totalIncome)}`}>
               <div style={{marginBottom: '8px', fontWeight: 500}}>Wpływy początkowe</div>
@@ -171,7 +219,7 @@ function StatisticsDashboard({ transactions }) {
                 {initialIncomes.length === 0 && <li style={{color:'#888'}}>Brak wpływów początkowych</li>}
                 {initialIncomes.map(t => (
                   <li key={t.id} className="income-list-item">
-                    <span className="income-date">{t.date}</span>:
+                    <span className="income-date">{formatDate(t.date)}</span>:
                     <span className="income-desc"> {t.description} </span>
                     <span className="income-amount">{formatCurrency(t.cost || t.amount)}</span>
                     <span className="income-actions">
@@ -187,7 +235,7 @@ function StatisticsDashboard({ transactions }) {
                 {extraIncomes.length === 0 && <li style={{color:'#888'}}>Brak wpływów dodatkowych</li>}
                 {extraIncomes.map(t => (
                   <li key={t.id} className="income-list-item">
-                    <span className="income-date">{t.date}</span>:
+                    <span className="income-date">{formatDate(t.date)}</span>:
                     <span className="income-desc"> {t.description} </span>
                     <span className="income-amount">{formatCurrency(t.cost || t.amount)}</span>
                     <span className="income-actions">
@@ -257,6 +305,7 @@ function StatisticsDashboard({ transactions }) {
         onClose={handleCloseModal}
         categoryName={modalInfo.category}
         transactions={modalInfo.transactions}
+        onDataChange={() => window.location.reload()} // Dodajemy funkcję odświeżania
       />
     </>
   );
