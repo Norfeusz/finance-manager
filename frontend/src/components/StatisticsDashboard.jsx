@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import CollapsibleSection from './CollapsibleSection';
 import CategoryDetailsModal from './CategoryDetailsModal';
 import Modal from './Modal';
@@ -10,24 +10,38 @@ function StatisticsDashboard({ transactions }) {
   const [modalInfo, setModalInfo] = useState({ isOpen: false, category: '', transactions: [] });
   const [incomeModal, setIncomeModal] = useState({ isOpen: false, transaction: null });
   const [editIncomeModal, setEditIncomeModal] = useState({ isOpen: false, transaction: null });
+  const [transferModal, setTransferModal] = useState({ isOpen: false, transaction: null });
+  const [editTransferModal, setEditTransferModal] = useState({ isOpen: false, transaction: null });
   const [accountBalances, setAccountBalances] = useState([]);
+  const [currentMonth, setCurrentMonth] = useState(null);
+  const [monthBudget, setMonthBudget] = useState(0);
 
-  // Pobierz stany kont z API
+  // Pobierz stany kont z API oraz dane o bieżącym miesiącu
   useEffect(() => {
-    const fetchAccountBalances = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/accounts/balances');
-        if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}`);
+        // Pobierz stany kont
+        const balancesResponse = await fetch('http://localhost:3001/api/accounts/balances');
+        if (!balancesResponse.ok) {
+          throw new Error(`HTTP error ${balancesResponse.status}`);
         }
-        const data = await response.json();
-        setAccountBalances(data);
+        const balancesData = await balancesResponse.json();
+        setAccountBalances(balancesData);
+        
+        // Pobierz dane o bieżącym miesiącu
+        const monthResponse = await fetch('http://localhost:3001/api/months/current');
+        if (!monthResponse.ok) {
+          throw new Error(`HTTP error ${monthResponse.status}`);
+        }
+        const monthData = await monthResponse.json();
+        setCurrentMonth(monthData);
+        setMonthBudget(parseFloat(monthData.budget) || 0);
       } catch (err) {
-        console.error('Błąd pobierania stanów kont:', err);
+        console.error('Błąd pobierania danych:', err);
       }
     };
 
-    fetchAccountBalances();
+    fetchData();
   }, []);
 
   // Funkcja pomocnicza do formatowania waluty
@@ -58,17 +72,20 @@ function StatisticsDashboard({ transactions }) {
 
   // Nowa logika: wpływy początkowe to pierwsze dwa wpływy z datą 1 danego miesiąca
   function getInitialAndExtraIncomes(transactions) {
+    // Najpierw odfiltrujmy wszystkie wpływy generowane z opcji "bilansujemy wydatek"
+    const realIncomes = transactions.filter(t => t.type === 'income' && !isBalanceExpenseIncome(t));
+    
     // Zakładamy, że data jest w formacie YYYY-MM-DD
     // Grupujemy po miesiącu
     const byMonth = {};
-    transactions.forEach(t => {
-      if (t.type !== 'income') return;
+    realIncomes.forEach(t => {
       const [year, month, day] = (t.date || '').split('-');
       if (!year || !month || !day) return;
       const monthKey = `${year}-${month}`;
       if (!byMonth[monthKey]) byMonth[monthKey] = [];
       byMonth[monthKey].push(t);
     });
+    
     let initial = [], extra = [];
     Object.values(byMonth).forEach(incomes => {
       // Filtrujemy tylko te z datą 1
@@ -78,7 +95,9 @@ function StatisticsDashboard({ transactions }) {
       initial = initial.concat(sorted.slice(0, 2));
       // Pozostałe z datą 1 i wszystkie inne to extra
       const initialIds = new Set(sorted.slice(0, 2).map(t => t.id));
-      extra = extra.concat(incomes.filter(t => !initialIds.has(t.id)));
+      const regularExtra = incomes.filter(t => !initialIds.has(t.id));
+      
+      extra = extra.concat(regularExtra);
     });
     return { initial, extra };
   }
@@ -90,22 +109,67 @@ function StatisticsDashboard({ transactions }) {
     return initialIncomes.some(i => i.id === t.id);
   }
 
+  // Funkcja pomocnicza do sprawdzenia czy dany wpływ był wygenerowany z opcją "bilansujemy wydatek"
+  function isBalanceExpenseIncome(transaction) {
+    return transaction.type === 'income' && 
+           transaction.extraDescription && 
+           transaction.extraDescription.includes('opcja: balance_expense');
+  }
+  
+  // Grupujemy transfery po dacie i kwocie, aby wyeliminować duplikaty
+  // Dla każdej pary data-kwota zostawiamy tylko jeden transfer
+  const seenTransfers = new Map();
+  const filteredTransfers = [];
+  
+  // Najpierw zbieramy wszystkie transfery
+  transactions.filter(t => t.type === 'transfer').forEach(t => {
+    const fromAccount = t.account || 'Nieznane';
+    let toAccount = 'Nieznane';
+    
+    // Wyciągnij nazwę konta docelowego z opisu
+    if (t.description && t.description.includes('Transfer do: ')) {
+      toAccount = t.description.replace('Transfer do: ', '');
+      
+      // Tworzymy unikalny klucz dla tego transferu (data + kwota + konta)
+      const transferKey = `${t.date}_${t.cost || t.amount}_${fromAccount}_${toAccount}`;
+      
+      // Jeśli jeszcze nie widzieliśmy tego transferu, dodajemy go do listy
+      if (!seenTransfers.has(transferKey)) {
+        seenTransfers.set(transferKey, true);
+        filteredTransfers.push({ ...t, fromAccount, toAccount });
+      }
+    }
+  });
+  
+  // Suma transferów - tylko z przefiltrowanych transferów, aby uniknąć podwójnego liczenia
+  const totalTransfersAmount = filteredTransfers.reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0);
+  
   // Proste statystyki
   const stats = {
-    overallBalance: transactions.reduce((acc, t) => acc + (t.type === 'income' ? Number(t.cost || t.amount || 0) : t.type === 'expense' ? -Number(t.cost || 0) : 0), 0),
+    overallBalance: transactions.reduce((acc, t) => acc + (t.type === 'income' && !isBalanceExpenseIncome(t) ? Number(t.cost || t.amount || 0) : t.type === 'expense' ? -Number(t.cost || 0) : 0), 0),
     accountBalances: transactions.reduce((acc, t) => {
       const accName = t.toAccount || t.account || 'Wspólne';
       if (!acc[accName]) acc[accName] = 0;
-      if (t.type === 'income') acc[accName] += Number(t.cost || t.amount || 0);
+      if (t.type === 'income' && !isBalanceExpenseIncome(t)) acc[accName] += Number(t.cost || t.amount || 0);
       if (t.type === 'expense') acc[accName] -= Number(t.cost || 0);
       return acc;
     }, { 'Wspólne': 0, 'Gotówka': 0, 'Oszczędnościowe': 0, 'Rachunki': 0, 'KWNR': 0 }),
     // Obliczanie sumy wszystkich kont - na podstawie danych z tabeli account_balances
     totalAccountsBalance: accountBalances.reduce((sum, account) => sum + parseFloat(account.current_balance || 0), 0),
     // Bilans miesiąca - różnica między wpływami a wydatkami w danym miesiącu
-    monthlyBalance: transactions.filter(t => t.type === 'income' || t.type === 'expense').reduce((acc, t) => acc + (t.type === 'income' ? Number(t.cost || t.amount || 0) : -Number(t.cost || 0)), 0),
-    totalIncome: transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0),
+    monthlyBalance: transactions.reduce((acc, t) => {
+      if (t.type === 'income' && !isBalanceExpenseIncome(t)) return acc + Number(t.cost || t.amount || 0);
+      if (t.type === 'expense') return acc - Number(t.cost || 0);
+      return acc;
+    }, 0),
+    // Założony bilans miesiąca - różnica między budżetem a wydatkami
+    monthlyBudgetBalance: monthBudget - transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.cost || 0), 0),
+    // Suma wpływów z wyłączeniem tych generowanych opcją "bilansujemy wydatek"
+    totalIncome: transactions.filter(t => t.type === 'income' && !isBalanceExpenseIncome(t)).reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0),
     totalExpenses: transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.cost || 0), 0),
+    // Transfery i ich suma
+    transfers: filteredTransfers,
+    totalTransfers: totalTransfersAmount,
     expenseByCategory: transactions.filter(t => t.type === 'expense').reduce((acc, t) => {
       if (!acc[t.category]) acc[t.category] = 0;
       acc[t.category] += Number(t.cost || 0);
@@ -159,19 +223,42 @@ function StatisticsDashboard({ transactions }) {
     }
   };
 
-  function getBalanceAfter(transaction) {
-    // Filtrujemy wszystkie wpływy i wydatki na to samo konto do momentu tej transakcji (włącznie)
-    const account = transaction.toAccount || transaction.account;
+  function getBalanceAfter(transaction, specificAccount = null) {
+    // Filtrujemy wszystkie wpływy, wydatki i transfery na to samo konto do momentu tej transakcji (włącznie)
+    // Jeśli podano specificAccount, używamy tego konta, w przeciwnym razie bierzemy konto z transakcji
+    const account = specificAccount || transaction.toAccount || transaction.account;
     if (!account) return '-';
+    
     const date = transaction.date;
     // Sortujemy transakcje po dacie i id
     const sorted = transactions
-      .filter(t => (t.toAccount || t.account) === account && t.date <= date)
+      .filter(t => {
+        // Sprawdzamy czy transakcja dotyczy danego konta (czy jako źródło czy jako cel)
+        const isAccountSource = t.account === account;
+        const isAccountDestination = t.toAccount === account || 
+                                   (t.description && t.description.includes(`do: ${account}`));
+        return (isAccountSource || isAccountDestination) && t.date <= date;
+      })
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.id || 0) - (b.id || 0)));
+    
     let saldo = 0;
     for (const t of sorted) {
-      if (t.type === 'income') saldo += Number(t.cost || t.amount || 0);
-      if (t.type === 'expense') saldo -= Number(t.cost || 0);
+      if (t.type === 'income' && !isBalanceExpenseIncome(t) && (t.account === account || t.toAccount === account)) {
+        saldo += Number(t.cost || t.amount || 0);
+      }
+      if (t.type === 'expense' && t.account === account) {
+        saldo -= Number(t.cost || 0);
+      }
+      if (t.type === 'transfer') {
+        // Dla transferu odejmujemy kwotę, jeśli konto jest źródłem transferu
+        if (t.account === account || t.fromAccount === account) {
+          saldo -= Number(t.cost || t.amount || 0);
+        }
+        // Dodajemy kwotę, jeśli konto jest celem transferu
+        else if (t.toAccount === account || (t.description && t.description.includes(`do: ${account}`))) {
+          saldo += Number(t.cost || t.amount || 0);
+        }
+      }
     }
     return formatCurrency(saldo);
   }
@@ -187,6 +274,62 @@ function StatisticsDashboard({ transactions }) {
 
   const handleCloseModal = () => {
     setModalInfo({ isOpen: false, category: '', transactions: [] });
+  };
+  
+  // Funkcja do edycji transferu
+  const handleEditTransfer = (transfer) => {
+    setEditTransferModal({ isOpen: true, transaction: transfer });
+  };
+
+  // Funkcja do zapisywania edytowanego transferu
+  const handleSaveEditTransfer = async (updatedData) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/expenses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ original: editTransferModal.transaction, updated: updatedData })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        alert('Transfer zaktualizowany!');
+        setEditTransferModal({ isOpen: false, transaction: null });
+        window.location.reload(); // lub odśwież dane w inny sposób
+      } else {
+        throw new Error(result.message || 'Błąd aktualizacji');
+      }
+    } catch (error) {
+      alert(`Wystąpił błąd: ${error.message}`);
+    }
+  };
+
+  // Funkcja do cofania transferu
+  const handleUndoTransfer = async (transfer) => {
+    if (!window.confirm('Czy na pewno chcesz cofnąć ten transfer? Ta operacja usunie oba rekordy transferu.')) return;
+    
+    try {
+      // Ponieważ transfer składa się z dwóch transakcji, musimy usunąć obie
+      const response = await fetch('http://localhost:3001/api/expenses/transfer', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: transfer.id,
+          date: transfer.date,
+          fromAccount: transfer.fromAccount,
+          toAccount: transfer.toAccount,
+          amount: transfer.cost || transfer.amount 
+        }),
+      });
+      
+      const result = await response.json();
+      if (response.ok) {
+        alert('Transfer został cofnięty.');
+        window.location.reload(); // lub odśwież dane w inny sposób
+      } else {
+        throw new Error(result.message || 'Nie udało się cofnąć transferu.');
+      }
+    } catch (error) {
+      alert(`Wystąpił błąd: ${error.message}`);
+    }
   };
 
   return (
@@ -211,6 +354,40 @@ function StatisticsDashboard({ transactions }) {
               <span className={`value ${stats.monthlyBalance >= 0 ? 'positive' : 'negative'}`}>
                 {formatCurrency(stats.monthlyBalance)}
               </span>
+            </div>
+            <div className="highlighted-stat">
+              <span className="label">Założony bilans miesiąca:</span>
+              <span className={`value ${stats.monthlyBudgetBalance >= 0 ? 'positive' : 'negative'}`}>
+                {formatCurrency(stats.monthlyBudgetBalance)}
+              </span>
+              <button 
+                className="small-button" 
+                onClick={() => {
+                  const newBudget = prompt('Podaj założony budżet miesiąca:', monthBudget);
+                  if (newBudget !== null) {
+                    const budget = parseFloat(newBudget.replace(',', '.'));
+                    if (!isNaN(budget) && budget >= 0) {
+                      setMonthBudget(budget);
+                      // Zapisz budżet w bazie danych
+                      fetch(`http://localhost:3001/api/months/${currentMonth.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ budget })
+                      })
+                      .then(response => {
+                        if (!response.ok) throw new Error('Błąd zapisywania budżetu');
+                        return response.json();
+                      })
+                      .then(data => console.log('Budżet zaktualizowany:', data))
+                      .catch(error => console.error('Błąd:', error));
+                    } else {
+                      alert('Podaj poprawną wartość liczbową (nie mniejszą niż 0).');
+                    }
+                  }
+                }}
+              >
+                ✏️
+              </button>
             </div>
             <hr/>
             <CollapsibleSection title={`Suma wpływów: ${formatCurrency(stats.totalIncome)}`}>
@@ -256,6 +433,27 @@ function StatisticsDashboard({ transactions }) {
                 ))}
               </ul>
             </CollapsibleSection>
+            <CollapsibleSection title={`Transfery między kontami: ${formatCurrency(stats.totalTransfers)}`}>
+              <ul className="transfers-list">
+                {stats.transfers.length === 0 && <li style={{color:'#888'}}>Brak transferów</li>}
+                {stats.transfers.map(transfer => (
+                  <li key={transfer.id} className="transfer-list-item">
+                    <span className="transfer-date">{formatDate(transfer.date)}</span>
+                    <span className="transfer-accounts">
+                      <span className="account-from">{transfer.fromAccount}</span>
+                      <span className="transfer-arrow"> → </span>
+                      <span className="account-to">{transfer.toAccount}</span>
+                    </span>
+                    <span className="transfer-amount">{formatCurrency(transfer.cost || transfer.amount)}</span>
+                    <span className="transfer-actions">
+                      <button title="Pokaż szczegóły" onClick={() => setTransferModal({isOpen:true, transaction:transfer})}>🔍</button>
+                      <button title="Edytuj transfer" onClick={() => handleEditTransfer(transfer)}>✏️</button>
+                      <button title="Cofnij transfer" onClick={() => handleUndoTransfer(transfer)}>↩️</button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleSection>
           </div>
         </div>
       </div>
@@ -282,7 +480,6 @@ function StatisticsDashboard({ transactions }) {
         )}
       </Modal>
 
-
       {/* Modal edycji wpływu */}
       {editIncomeModal.isOpen && editIncomeModal.transaction && (
         <EditTransactionModal
@@ -293,13 +490,6 @@ function StatisticsDashboard({ transactions }) {
         />
       )}
 
-  // Funkcje do edycji i usuwania wpływów
-  
-
-
-  // Funkcja do wyliczania salda po operacji (prosta symulacja)
-  
-
       <CategoryDetailsModal 
         isOpen={modalInfo.isOpen}
         onClose={handleCloseModal}
@@ -307,6 +497,34 @@ function StatisticsDashboard({ transactions }) {
         transactions={modalInfo.transactions}
         onDataChange={() => window.location.reload()} // Dodajemy funkcję odświeżania
       />
+      
+      {/* Modal szczegółów transferu */}
+      <Modal isOpen={transferModal.isOpen} onClose={() => setTransferModal({isOpen:false, transaction:null})} title="Szczegóły transferu">
+        {transferModal.transaction && (
+          <div className="transaction-full-details">
+            <ul>
+              <li><strong>Z konta:</strong> {transferModal.transaction.fromAccount || transferModal.transaction.account || '-'}</li>
+              <li><strong>Saldo konta źródłowego po operacji:</strong> {getBalanceAfter(transferModal.transaction, transferModal.transaction.fromAccount || transferModal.transaction.account)}</li>
+              <li><strong>Na konto:</strong> {transferModal.transaction.toAccount || '-'}</li>
+              <li><strong>Saldo konta docelowego po operacji:</strong> {getBalanceAfter(transferModal.transaction, transferModal.transaction.toAccount)}</li>
+              <li><strong>Kwota:</strong> {formatCurrency(transferModal.transaction.cost || transferModal.transaction.amount)}</li>
+              <li><strong>Data:</strong> {transferModal.transaction.date ? new Date(transferModal.transaction.date).toLocaleDateString('pl-PL') : '-'}</li>
+              <li><strong>Notatka:</strong> {transferModal.transaction.extraDescription || '-'}</li>
+            </ul>
+          </div>
+        )}
+      </Modal>
+      
+      {/* Modal edycji transferu */}
+      {editTransferModal.isOpen && editTransferModal.transaction && (
+        <EditTransactionModal
+          isOpen={editTransferModal.isOpen}
+          onClose={() => setEditTransferModal({ isOpen: false, transaction: null })}
+          transaction={editTransferModal.transaction}
+          onSave={handleSaveEditTransfer}
+          isTransfer={true}
+        />
+      )}
     </>
   );
 }

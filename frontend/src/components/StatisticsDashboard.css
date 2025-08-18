@@ -28,3 +28,75 @@
 .negative {
     color: #ea4335 !important;
 }
+
+.small-button {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 0 5px;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+}
+
+.small-button:hover {
+    color: #4285f4;
+}
+
+/* Style dla sekcji transferów */
+.transfers-list {
+    padding-left: 0;
+    list-style-type: none;
+}
+
+.transfer-list-item {
+    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px dotted #eee;
+}
+
+.transfer-date {
+    color: #666;
+    min-width: 80px;
+    display: inline-block;
+}
+
+.transfer-accounts {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    margin: 0 10px;
+}
+
+.account-from {
+    font-weight: 500;
+    color: #555;
+}
+
+.transfer-arrow {
+    margin: 0 8px;
+    color: #888;
+    font-size: 16px;
+}
+
+.account-to {
+    font-weight: 500;
+    color: #555;
+}
+
+.transfer-amount {
+    font-family: monospace;
+    min-width: 90px;
+    text-align: right;
+    margin-right: 10px;
+    font-weight: 500;
+}
+
+.transfer-actions {
+    white-space: nowrap;
+}
+
+

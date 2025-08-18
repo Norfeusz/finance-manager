@@ -139,6 +139,48 @@ router.post('/', async (req, res) => {
 /**
  * DELETE /api/months/:id - usuwanie miesiąca
  */
+/**
+ * PATCH /api/months/:id - aktualizacja budżetu miesiąca
+ */
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { budget } = req.body;
+    
+    if (budget === undefined) {
+      return res.status(400).json({ message: 'Budżet jest wymagany' });
+    }
+
+    if (isNaN(parseFloat(budget)) || parseFloat(budget) < 0) {
+      return res.status(400).json({ message: 'Budżet musi być liczbą nieujemną' });
+    }
+    
+    const client = await pool.connect();
+    
+    try {
+      // Sprawdź, czy miesiąc istnieje
+      const checkResult = await client.query('SELECT * FROM months WHERE id = $1', [id]);
+      
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Nie znaleziono miesiąca o podanym ID' });
+      }
+      
+      // Zaktualizuj budżet miesiąca
+      const result = await client.query(
+        'UPDATE months SET budget = $1 WHERE id = $2 RETURNING *',
+        [parseFloat(budget), id]
+      );
+      
+      res.json(result.rows[0]);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji budżetu miesiąca:', error);
+    res.status(500).json({ message: 'Błąd serwera podczas aktualizacji budżetu miesiąca', error: error.message });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;

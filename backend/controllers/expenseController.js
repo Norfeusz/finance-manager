@@ -175,6 +175,30 @@ const addTransaction = async (req, res) => {
             console.log(`Zaktualizowano saldo konta ${data.account}, odjęto kwotę ${parseFloat(data.cost)}`);
             
             // Specjalna logika dla wydatków z konta Gabi lub Norf
+            // Dodaj adnotację o sposobie obsługi wydatku
+            const balanceOption = data.balanceOption || 'budget_increase';
+            let noteText = '';
+            
+            if (balanceOption === 'budget_increase') {
+                noteText = `Wydatek z konta ${data.account} zwiększył budżet tego miesiąca`;
+            } else if (balanceOption === 'balance_expense') {
+                noteText = `Wydatek został zbilansowany transferem na konto ${data.account}`;
+            }
+            
+            // Aktualizuj extraDescription z informacją o opcji bilansowania
+            if (noteText) {
+                const currentExtraDesc = extraDescription || '';
+                const updatedExtraDesc = currentExtraDesc + (currentExtraDesc ? "\n" : "") + noteText;
+                
+                await client.query(`
+                    UPDATE transactions 
+                    SET extra_description = $1
+                    WHERE id = (SELECT currval('transactions_id_seq'))
+                `, [updatedExtraDesc]);
+                
+                console.log(`Dodano adnotację do transakcji: ${noteText}`);
+            }
+            
             // Automatycznie generujemy wpływ na konto Wspólne
             if (data.account === 'Gabi' || data.account === 'Norf') {
               // Znajdź konto Wspólne
@@ -197,12 +221,14 @@ const addTransaction = async (req, res) => {
               const expenseAmount = parseFloat(data.cost);
               const wpływOpis = `Zwrot od: ${data.account} - ${description || 'wydatek'}`;
               
-              // Zapisz transakcję wpływu
+              // Zapisz transakcję wpływu z informacją o wybranej opcji bilansowania
+              const extraDesc = `Automatycznie wygenerowane z wydatku z konta ${data.account} (opcja: ${balanceOption})`;
+              
               await client.query(
                 `INSERT INTO transactions 
                  (month_id, account_id, type, amount, description, extra_description, date)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [monthId, commonAccountId, 'income', expenseAmount, wpływOpis, `Automatycznie wygenerowane z wydatku z konta ${data.account}`, date]
+                [monthId, commonAccountId, 'income', expenseAmount, wpływOpis, extraDesc, date]
               );
               
               // Sprawdź czy istnieje wpis w account_balances dla konta Wspólne
@@ -219,15 +245,9 @@ const addTransaction = async (req, res) => {
                 `, [commonAccountId]);
               }
               
-              // Aktualizujemy saldo konta Wspólnego, aby odzwierciedlało rzeczywisty stan środków
-              await client.query(`
-                UPDATE account_balances 
-                SET current_balance = current_balance + $1,
-                    last_updated = NOW()
-                WHERE account_id = $2
-              `, [expenseAmount, commonAccountId]);
-              
-              console.log(`Zaktualizowano saldo konta Wspólne, dodano kwotę ${expenseAmount}`)
+              // Nie aktualizujemy salda konta Wspólnego dla opcji "Zwiększamy budżet"
+              // Wpływ jest rejestrowany tylko w celach raportowania, ale nie zmienia faktycznego stanu konta
+              console.log(`Opcja "Zwiększamy budżet" - pominięto aktualizację salda konta Wspólne`)
             }
             
             break;
@@ -539,15 +559,9 @@ const deleteTransaction = async (req, res) => {
                         
                         console.log(`Znaleziono automatyczny wpływ o ID: ${autoIncome.id} na konto ${targetAccountName}`);
                         
-                        // Odejmij kwotę automatycznego wpływu z salda konta docelowego (zwykle Wspólne)
-                        await client.query(`
-                            UPDATE account_balances 
-                            SET current_balance = current_balance - $1,
-                                last_updated = NOW()
-                            WHERE account_id = $2
-                        `, [amount, targetAccountId]);
-                        
-                        console.log(`Zaktualizowano saldo konta ${targetAccountName}, odjęto kwotę ${amount}`);
+                        // Nie odejmujemy kwoty automatycznego wpływu z salda konta docelowego,
+                        // ponieważ dla opcji "Zwiększamy budżet" saldo konta nie jest aktualizowane
+                        console.log(`Usuwanie automatycznego wpływu dla opcji "Zwiększamy budżet" - saldo konta ${targetAccountName} pozostaje bez zmian`);
                         
                         // Usuwamy automatycznie wygenerowaną transakcję wpływu
                         await client.query('DELETE FROM transactions WHERE id = $1', [autoIncome.id]);
@@ -820,15 +834,9 @@ const updateTransaction = async (req, res) => {
                         const autoIncome = autoIncomeResult.rows[0];
                         const commonAccountId = autoIncome.account_id;
                         
-                            // Musimy zaktualizować saldo konta Wspólnego (wycofać automatyczny wpływ)
-                        await client.query(`
-                            UPDATE account_balances 
-                            SET current_balance = current_balance - $1,
-                                last_updated = NOW()
-                            WHERE account_id = $2
-                        `, [originalAmount, commonAccountId]);
-                        
-                        console.log(`Wycofano wpływ na konto Wspólne, odjęto kwotę ${originalAmount}`);
+                            // Dla opcji "Zwiększamy budżet" nie cofamy aktualizacji salda konta Wspólnego,
+                        // ponieważ saldo nie zostało zaktualizowane przy dodawaniu transakcji
+                        console.log(`Usuwanie automatycznego wpływu dla opcji "Zwiększamy budżet" - saldo konta Wspólne pozostaje bez zmian`);
                         
                         // Usuwamy automatycznie wygenerowaną transakcję wpływu
                         await client.query('DELETE FROM transactions WHERE id = $1', [autoIncome.id]);
@@ -871,15 +879,9 @@ const updateTransaction = async (req, res) => {
                         updated.date || transaction.date]
                     );
                     
-                    // Aktualizujemy saldo konta Wspólnego, zwiększając je o kwotę automatycznego wpływu
-                    await client.query(`
-                        UPDATE account_balances 
-                        SET current_balance = current_balance + $1,
-                            last_updated = NOW()
-                        WHERE account_id = $2
-                    `, [expenseAmount, commonAccountId]);
-                    
-                    console.log(`Zaktualizowano saldo konta Wspólne, dodano automatyczny wpływ w kwocie ${expenseAmount}`);
+                    // Dla opcji "Zwiększamy budżet" nie aktualizujemy salda konta Wspólnego
+                    // Transakcja wpływu jest rejestrowana tylko w celach raportowania
+                    console.log(`Opcja "Zwiększamy budżet" - pominięto aktualizację salda konta Wspólne`);
                 }
             } 
             else if (transactionType === 'income') {
@@ -1048,4 +1050,90 @@ const updateTransaction = async (req, res) => {
     }
 };
 
-module.exports = { addTransaction, deleteTransaction, updateTransaction };
+// Funkcja do usuwania transferu (oba rekordy - wychodzący i przychodzący)
+const deleteTransfer = async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        const { id, date, fromAccount, toAccount, amount } = req.body;
+        
+        if (!fromAccount || !toAccount || !amount) {
+            return res.status(400).json({ message: 'Brakujące dane: konto źródłowe, konto docelowe lub kwota' });
+        }
+        
+        await client.query('BEGIN');
+        
+        // Znajdź konto źródłowe
+        let fromAccountRes = await client.query('SELECT id FROM accounts WHERE name = $1', [fromAccount]);
+        if (fromAccountRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: `Nie znaleziono konta źródłowego: ${fromAccount}` });
+        }
+        const fromAccountId = fromAccountRes.rows[0].id;
+        
+        // Znajdź konto docelowe
+        let toAccountRes = await client.query('SELECT id FROM accounts WHERE name = $1', [toAccount]);
+        if (toAccountRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: `Nie znaleziono konta docelowego: ${toAccount}` });
+        }
+        const toAccountId = toAccountRes.rows[0].id;
+        
+        // Znajdź miesiąc dla tej daty
+        const transactionDate = new Date(date);
+        const monthYear = transactionDate.getFullYear();
+        const monthNum = transactionDate.getMonth() + 1;
+        
+        let monthRes = await client.query(
+            'SELECT id FROM months WHERE year = $1 AND month = $2',
+            [monthYear, monthNum]
+        );
+        
+        if (monthRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Nie znaleziono miesiąca dla podanej daty.' });
+        }
+        
+        const monthId = monthRes.rows[0].id;
+        
+        // Usuń rekord transferu wychodzącego
+        await client.query(`
+            DELETE FROM transactions 
+            WHERE month_id = $1 AND account_id = $2 AND type = 'transfer' AND amount = $3
+        `, [monthId, fromAccountId, amount]);
+        
+        // Usuń rekord transferu przychodzącego
+        await client.query(`
+            DELETE FROM transactions 
+            WHERE month_id = $1 AND account_id = $2 AND type = 'transfer' AND amount = $3
+        `, [monthId, toAccountId, amount]);
+        
+        // Aktualizuj saldo konta źródłowego - dodaj kwotę (cofamy odjęcie)
+        await client.query(`
+            UPDATE account_balances
+            SET current_balance = current_balance + $1,
+                last_updated = NOW()
+            WHERE account_id = $2
+        `, [parseFloat(amount), fromAccountId]);
+        
+        // Aktualizuj saldo konta docelowego - odejmij kwotę (cofamy dodanie)
+        await client.query(`
+            UPDATE account_balances
+            SET current_balance = current_balance - $1,
+                last_updated = NOW()
+            WHERE account_id = $2
+        `, [parseFloat(amount), toAccountId]);
+        
+        await client.query('COMMIT');
+        
+        res.status(200).json({ message: 'Transfer został pomyślnie usunięty.' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Błąd podczas usuwania transferu:', error);
+        res.status(500).json({ message: 'Błąd serwera podczas usuwania transferu.', error: error.message });
+    } finally {
+        client.release();
+    }
+};
+
+module.exports = { addTransaction, deleteTransaction, updateTransaction, deleteTransfer };

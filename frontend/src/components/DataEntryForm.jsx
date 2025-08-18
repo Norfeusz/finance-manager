@@ -4,9 +4,22 @@ import ShoppingBreakdownForm from './ShoppingBreakdownForm';
 
 // -- Komponenty pomocnicze --
 
-const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shoppingBreakdown }) => {
+const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shoppingBreakdown, onAccountChange, onBalanceOptionChange }) => {
     const [isShoppingModalOpen, setIsShoppingModalOpen] = useState(false);
     const [totalCost, setTotalCost] = useState('');
+    const [account, setAccount] = useState('Wspólne');
+    const [balanceOption, setBalanceOption] = useState('budget_increase');
+    
+    // Wywołaj funkcje zwrotne przy zmianie wartości
+    useEffect(() => {
+        if (onAccountChange) onAccountChange(account);
+    }, [account, onAccountChange]);
+    
+    useEffect(() => {
+        if (onBalanceOptionChange) onBalanceOptionChange(balanceOption);
+        
+        // Nie wyświetlamy alertu przy zmianie opcji
+    }, [balanceOption, onBalanceOptionChange, account]);
 
     const handleBreakdownSave = (breakdown) => {
         onBreakdownChange(breakdown);
@@ -14,6 +27,9 @@ const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shopp
     };
     
     const expenseCategories = [ 'zakupy codzienne', 'auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty' ];
+    
+    // Pokazujemy opcje tylko dla kont Gabi lub Norf
+    const showBalanceOptions = account === 'Gabi' || account === 'Norf';
 
     return (
     <>
@@ -52,7 +68,13 @@ const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shopp
         
                 <div className="form-group">
                     <label htmlFor="account">Konto (obciążane):</label>
-                    <select id="account" name="account" required>
+                    <select 
+                        id="account" 
+                        name="account" 
+                        required 
+                        value={account} 
+                        onChange={(e) => setAccount(e.target.value)}
+                    >
                         <option value="Wspólne">Wspólne</option>
                         <option value="Gotówka">Gotówka</option>
                         <option value="Oszczędnościowe">Oszczędnościowe</option>
@@ -62,6 +84,35 @@ const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shopp
                         <option value="Norf">Norf</option>
                     </select>
                 </div>
+                
+                {showBalanceOptions && (
+                    <div className="form-group balance-options">
+                        <label>Jak obsłużyć wydatek z konta {account}?</label>
+                        <div className="balance-option-choices">
+                            <label>
+                                <input
+                                    type="radio"
+                                    name="balanceOption"
+                                    value="budget_increase"
+                                    checked={balanceOption === 'budget_increase'}
+                                    onChange={() => setBalanceOption('budget_increase')}
+                                    required
+                                />
+                                <span>Zwiększamy budżet</span>
+                            </label>
+                            <label>
+                                <input
+                                    type="radio"
+                                    name="balanceOption"
+                                    value="balance_expense"
+                                    checked={balanceOption === 'balance_expense'}
+                                    onChange={() => setBalanceOption('balance_expense')}
+                                />
+                                <span>Bilansujemy wydatek</span>
+                            </label>
+                        </div>
+                    </div>
+                )}
 
         <Modal isOpen={isShoppingModalOpen} onClose={() => setIsShoppingModalOpen(false)} title="Rozbicie Paragonu">
             <ShoppingBreakdownForm 
@@ -172,6 +223,9 @@ function DataEntryForm({ onNewEntry }) {
   // Nowe stany do obsługi wpływu od Gabi/Norf
   const [incomeFrom, setIncomeFrom] = useState('');
   const [advanceType, setAdvanceType] = useState('current');
+  
+  // Nowe stany do obsługi wydatków z konta Gabi/Norf
+  const [balanceOption, setBalanceOption] = useState('budget_increase');
 
   // Pokazujemy pytanie tylko jeśli wybrano Gabi lub Norf
   const showAdvanceOption = flowType === 'income' && (incomeFrom.trim().toLowerCase() === 'gabi' || incomeFrom.trim().toLowerCase() === 'norf');
@@ -210,7 +264,17 @@ function DataEntryForm({ onNewEntry }) {
     } else {
         let dataPayload = { ...commonData };
         if (flowType === 'expense') {
-            dataPayload = { ...dataPayload, mainCategory: form.elements.mainCategory.value, account: form.elements.account.value, cost: form.elements.cost.value, subCategory: '', description: form.elements.description?.value || '' };
+            const accountValue = form.elements.account.value;
+            dataPayload = { 
+                ...dataPayload, 
+                mainCategory: form.elements.mainCategory.value, 
+                account: accountValue, 
+                cost: form.elements.cost.value, 
+                subCategory: '', 
+                description: form.elements.description?.value || '',
+                // Dodajemy opcję bilansowania, jeśli konto to Gabi lub Norf
+                balanceOption: (accountValue === 'Gabi' || accountValue === 'Norf') ? balanceOption : undefined
+            };
         } else if (flowType === 'income') {
             dataPayload = {
                 ...dataPayload,
@@ -230,6 +294,22 @@ function DataEntryForm({ onNewEntry }) {
     }
     
     setResponseMessage({ text: 'Przetwarzanie...', type: '' });
+    
+    // Sprawdź, czy to wydatek z konta Gabi/Norf z opcją bilansowania wydatku
+    if (flowType === 'expense') {
+        const accountValue = form.elements.account.value;
+        const cost = parseFloat(form.elements.cost.value);
+        if ((accountValue === 'Gabi' || accountValue === 'Norf') && balanceOption === 'balance_expense' && !isNaN(cost)) {
+            const confirmTransfer = window.confirm(
+                `Wykonaj transfer w kwocie ${cost.toFixed(2)} zł z konta wspólnego na ${accountValue}.`
+            );
+            if (!confirmTransfer) {
+                setResponseMessage({ text: '', type: '' });
+                return;
+            }
+        }
+    }
+    
     try {
         const response = await fetch('http://localhost:3001/api/expenses', {
             method: 'POST',
@@ -249,7 +329,8 @@ function DataEntryForm({ onNewEntry }) {
         } else {
             setResponseMessage({ text: `Błąd: ${result.message}`, type: 'error' });
         }
-    } catch (error) {
+    } catch (err) {
+        console.error('Błąd podczas zapisywania danych:', err);
         setResponseMessage({ text: 'Błąd połączenia z serwerem.', type: 'error' });
     }
   };
@@ -264,7 +345,16 @@ function DataEntryForm({ onNewEntry }) {
                 <label className={flowType === 'transfer' ? 'active' : ''}><input type="radio" name="flowType" value="transfer" checked={flowType === 'transfer'} onChange={() => setFlowType('transfer')} /> Transfer</label>
             </div>
 
-            {flowType === 'expense' && <ExpenseFields onBreakdownChange={setShoppingBreakdown} mainCategory={mainCategory} setMainCategory={setMainCategory} shoppingBreakdown={shoppingBreakdown} />}
+            {flowType === 'expense' && (
+                <ExpenseFields 
+                    onBreakdownChange={setShoppingBreakdown} 
+                    mainCategory={mainCategory} 
+                    setMainCategory={setMainCategory} 
+                    shoppingBreakdown={shoppingBreakdown}
+                    onAccountChange={() => {}} // Usuwamy niewykorzystaną funkcję
+                    onBalanceOptionChange={setBalanceOption}
+                />
+            )}
             {flowType === 'income' && (
                 <IncomeFields
                     incomeFrom={incomeFrom}
