@@ -21,6 +21,12 @@
     font-size: 1.15em;
 }
 
+/* Dodany nowy styl dla "Założony bilans miesiąca" */
+.budget-stat {
+    background-color: #f5fff7;
+    border-left: 4px solid #34a853;
+}
+
 .positive {
     color: #34a853 !important;
 }
@@ -45,6 +51,20 @@
     color: #4285f4;
 }
 
+/* Style dla tytułów sekcji z kwotą po prawej */
+.section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.section-amount {
+    font-family: monospace;
+    color: #4285f4;
+    font-weight: 500;
+}
+
 /* Style dla sekcji transferów */
 .transfers-list {
     padding-left: 0;
@@ -52,51 +72,99 @@
 }
 
 .transfer-list-item {
-    padding: 8px 0;
+    padding: 8px 5px;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     border-bottom: 1px dotted #eee;
+    transition: background-color 0.2s;
+    width: 100%;
+    overflow: visible;
+}
+
+.transfer-list-item:hover {
+    background-color: #f9f9f9;
+}
+
+.transfer-row {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    flex-wrap: nowrap;
+    min-height: 24px;
+}
+
+.transfer-row.secondary {
+    margin-top: 4px;
+    justify-content: space-between;
 }
 
 .transfer-date {
     color: #666;
-    min-width: 80px;
-    display: inline-block;
+    width: 80px;
+    margin-right: 5px;
+    flex-shrink: 0;
 }
 
 .transfer-accounts {
     flex-grow: 1;
     display: flex;
     align-items: center;
-    margin: 0 10px;
+    min-width: 0;
+    padding: 0 5px;
 }
 
 .account-from {
     font-weight: 500;
     color: #555;
+    white-space: normal;
+    word-break: keep-all;
+    padding-right: 2px;
 }
 
 .transfer-arrow {
-    margin: 0 8px;
-    color: #888;
-    font-size: 16px;
+    margin: 0 4px;
+    color: #4285f4;
+    font-size: 14px;
+    font-weight: bold;
+    flex-shrink: 0;
 }
 
 .account-to {
     font-weight: 500;
     color: #555;
+    white-space: normal;
+    word-break: keep-all;
+    padding-left: 2px;
 }
 
 .transfer-amount {
     font-family: monospace;
-    min-width: 90px;
-    text-align: right;
-    margin-right: 10px;
+    font-size: 1.1em;
+    text-align: left;
+    margin-left: 5px;
     font-weight: 500;
+    color: #4285f4;
 }
 
 .transfer-actions {
     white-space: nowrap;
+    margin-left: auto;
+    display: flex;
+}
+
+.action-button {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    font-size: 14px !important;
+    padding: 2px 4px !important;
+    margin: 0 2px !important;
+    background: none !important;
+    border: none !important;
+    cursor: pointer !important;
+}
+
+.action-button:hover {
+    opacity: 1;
 }
 
 

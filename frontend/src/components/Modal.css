@@ -8,8 +8,9 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9000;
+    z-index: 10000;
     backdrop-filter: blur(5px);
+    overflow: hidden;
 }
 
 .modal-content {
@@ -18,14 +19,17 @@
     border-radius: 8px;
     width: 90%;
     max-width: 600px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    max-height: 90vh; /* Ograniczenie maksymalnej wysokości */
+    box-shadow: 0 0 30px rgba(0,0,0,0.7);
     opacity: 1;
     background-color: #ffffff;
     position: relative;
-    z-index: 1001;
+    z-index: 10001;
     /* Dodatkowe style dla lepszej izolacji warstw */
     isolation: isolate;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Zapobieganie przewijaniu na poziomie kontenera */
 }
 
 .modal-header {
@@ -35,6 +39,7 @@
     border-bottom: 1px solid #eee;
     padding-bottom: 15px;
     margin-bottom: 15px;
+    background-color: #ffffff;
 }
 
 .modal-header h2 {
@@ -54,5 +59,9 @@
     padding: 10px 0;
     background-color: #ffffff;
     position: relative;
-    z-index: 1002;
+    z-index: 10002;
+    max-height: 70vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
 }

@@ -146,7 +146,22 @@ function StatisticsDashboard({ transactions }) {
   
   // Proste statystyki
   const stats = {
-    overallBalance: transactions.reduce((acc, t) => acc + (t.type === 'income' && !isBalanceExpenseIncome(t) ? Number(t.cost || t.amount || 0) : t.type === 'expense' ? -Number(t.cost || 0) : 0), 0),
+    // Ogólny bilans, uwzględniający transfery na konto "Rachunki" jako wydatki
+    overallBalance: transactions.reduce((acc, t) => {
+      if (t.type === 'income' && !isBalanceExpenseIncome(t)) {
+        return acc + Number(t.cost || t.amount || 0);
+      } 
+      if (t.type === 'expense') {
+        return acc - Number(t.cost || 0);
+      }
+      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      if (t.type === 'transfer' && 
+          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
+           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+        return acc - Number(t.cost || t.amount || 0);
+      }
+      return acc;
+    }, 0),
     accountBalances: transactions.reduce((acc, t) => {
       const accName = t.toAccount || t.account || 'Wspólne';
       if (!acc[accName]) acc[accName] = 0;
@@ -157,22 +172,80 @@ function StatisticsDashboard({ transactions }) {
     // Obliczanie sumy wszystkich kont - na podstawie danych z tabeli account_balances
     totalAccountsBalance: accountBalances.reduce((sum, account) => sum + parseFloat(account.current_balance || 0), 0),
     // Bilans miesiąca - różnica między wpływami a wydatkami w danym miesiącu
+    // Teraz uwzględniamy transfery na konto "Rachunki" i "KWNR" jako wydatki
     monthlyBalance: transactions.reduce((acc, t) => {
-      if (t.type === 'income' && !isBalanceExpenseIncome(t)) return acc + Number(t.cost || t.amount || 0);
-      if (t.type === 'expense') return acc - Number(t.cost || 0);
+      if (t.type === 'income' && !isBalanceExpenseIncome(t)) {
+        return acc + Number(t.cost || t.amount || 0);
+      }
+      if (t.type === 'expense') {
+        return acc - Number(t.cost || 0);
+      }
+      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      if (t.type === 'transfer' && 
+          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
+           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+        return acc - Number(t.cost || t.amount || 0);
+      }
       return acc;
     }, 0),
-    // Założony bilans miesiąca - różnica między budżetem a wydatkami
-    monthlyBudgetBalance: monthBudget - transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.cost || 0), 0),
+    // Założony bilans miesiąca - różnica między budżetem a wydatkami (uwzględniając transfery na Rachunki i KWNR)
+    monthlyBudgetBalance: monthBudget - transactions.reduce((acc, t) => {
+      if (t.type === 'expense') {
+        return acc + Number(t.cost || 0);
+      }
+      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      if (t.type === 'transfer' && 
+          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
+           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+        return acc + Number(t.cost || t.amount || 0);
+      }
+      return acc;
+    }, 0),
     // Suma wpływów z wyłączeniem tych generowanych opcją "bilansujemy wydatek"
     totalIncome: transactions.filter(t => t.type === 'income' && !isBalanceExpenseIncome(t)).reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0),
-    totalExpenses: transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.cost || 0), 0),
+    // W sumie wydatków uwzględniamy także transfery na konto "Rachunki" i "KWNR"
+    totalExpenses: transactions.reduce((acc, t) => {
+      if (t.type === 'expense') {
+        return acc + Number(t.cost || 0);
+      }
+      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      if (t.type === 'transfer' && 
+          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
+           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+        return acc + Number(t.cost || t.amount || 0);
+      }
+      return acc;
+    }, 0),
     // Transfery i ich suma
     transfers: filteredTransfers,
     totalTransfers: totalTransfersAmount,
-    expenseByCategory: transactions.filter(t => t.type === 'expense').reduce((acc, t) => {
-      if (!acc[t.category]) acc[t.category] = 0;
-      acc[t.category] += Number(t.cost || 0);
+    // Wydatki według kategorii, uwzględniające transfery na konto "Rachunki" i "KWNR"
+    expenseByCategory: transactions.reduce((acc, t) => {
+      // Standardowe wydatki
+      if (t.type === 'expense') {
+        const category = t.category || 'Inne';
+        if (!acc[category]) acc[category] = 0;
+        acc[category] += Number(t.cost || 0);
+      }
+      
+      // Transfery na konto "Rachunki" traktujemy jak wydatki w kategorii "Transfer na Rachunki"
+      if (t.type === 'transfer' && 
+          (t.description && t.description.includes('Transfer do: Rachunki') ||
+           t.toAccount === 'Rachunki')) {
+        const category = 'Transfer na Rachunki';
+        if (!acc[category]) acc[category] = 0;
+        acc[category] += Number(t.cost || t.amount || 0);
+      }
+      
+      // Transfery na konto "KWNR" traktujemy jak wydatki w kategorii "Transfer na KWNR"
+      if (t.type === 'transfer' && 
+          (t.description && t.description.includes('Transfer do: KWNR') ||
+           t.toAccount === 'KWNR')) {
+        const category = 'Transfer na KWNR';
+        if (!acc[category]) acc[category] = 0;
+        acc[category] += Number(t.cost || t.amount || 0);
+      }
+      
       return acc;
     }, {})
   };
@@ -230,14 +303,27 @@ function StatisticsDashboard({ transactions }) {
     if (!account) return '-';
     
     const date = transaction.date;
+    // ID transakcji, aby uwzględnić tylko transakcje wykonane przed lub równocześnie z tą transakcją
+    const transactionId = transaction.id || 0;
+    
     // Sortujemy transakcje po dacie i id
     const sorted = transactions
       .filter(t => {
         // Sprawdzamy czy transakcja dotyczy danego konta (czy jako źródło czy jako cel)
-        const isAccountSource = t.account === account;
+        const isAccountSource = t.account === account || t.fromAccount === account;
         const isAccountDestination = t.toAccount === account || 
                                    (t.description && t.description.includes(`do: ${account}`));
-        return (isAccountSource || isAccountDestination) && t.date <= date;
+                                   
+        // Uwzględniamy transakcje do tej daty
+        if (t.date < date) return isAccountSource || isAccountDestination;
+        
+        // Dla transakcji z tą samą datą, sprawdzamy ID, aby zapewnić poprawną kolejność
+        if (t.date === date) {
+          const tId = t.id || 0;
+          return (isAccountSource || isAccountDestination) && tId <= transactionId;
+        }
+        
+        return false;
       })
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.id || 0) - (b.id || 0)));
     
@@ -350,16 +436,20 @@ function StatisticsDashboard({ transactions }) {
           <div className="card">
             <h2>Aktualny miesiąc</h2>
             <div className="highlighted-stat">
-              <span className="label">Bilans miesiąca:</span>
-              <span className={`value ${stats.monthlyBalance >= 0 ? 'positive' : 'negative'}`}>
-                {formatCurrency(stats.monthlyBalance)}
-              </span>
+              <div className="section-title">
+                <span className="label">Bilans miesiąca:</span>
+                <span className={`value ${stats.monthlyBalance >= 0 ? 'positive' : 'negative'}`}>
+                  {formatCurrency(stats.monthlyBalance)}
+                </span>
+              </div>
             </div>
-            <div className="highlighted-stat">
-              <span className="label">Założony bilans miesiąca:</span>
-              <span className={`value ${stats.monthlyBudgetBalance >= 0 ? 'positive' : 'negative'}`}>
-                {formatCurrency(stats.monthlyBudgetBalance)}
-              </span>
+            <div className="highlighted-stat budget-stat">
+              <div className="section-title">
+                <span className="label">Założony bilans miesiąca:</span>
+                <span className={`value ${stats.monthlyBudgetBalance >= 0 ? 'positive' : 'negative'}`}>
+                  {formatCurrency(stats.monthlyBudgetBalance)}
+                </span>
+              </div>
               <button 
                 className="small-button" 
                 onClick={() => {
@@ -390,7 +480,7 @@ function StatisticsDashboard({ transactions }) {
               </button>
             </div>
             <hr/>
-            <CollapsibleSection title={`Suma wpływów: ${formatCurrency(stats.totalIncome)}`}>
+            <CollapsibleSection title={<div className="section-title"><span>Suma wpływów:</span><span className="section-amount">{formatCurrency(stats.totalIncome)}</span></div>}>
               <div style={{marginBottom: '8px', fontWeight: 500}}>Wpływy początkowe</div>
               <ul>
                 {initialIncomes.length === 0 && <li style={{color:'#888'}}>Brak wpływów początkowych</li>}
@@ -424,7 +514,7 @@ function StatisticsDashboard({ transactions }) {
                 ))}
               </ul>
             </CollapsibleSection>
-            <CollapsibleSection title={`Suma wydatków: ${formatCurrency(stats.totalExpenses)}`}>
+            <CollapsibleSection title={<div className="section-title"><span>Suma wydatków:</span><span className="section-amount">{formatCurrency(stats.totalExpenses)}</span></div>}>
               <ul>
                 {Object.entries(stats.expenseByCategory).map(([category, total]) => (
                   <li key={category} onClick={() => handleCategoryClick(category)} className="clickable-category">
@@ -433,23 +523,27 @@ function StatisticsDashboard({ transactions }) {
                 ))}
               </ul>
             </CollapsibleSection>
-            <CollapsibleSection title={`Transfery między kontami: ${formatCurrency(stats.totalTransfers)}`}>
+            <CollapsibleSection title={<div className="section-title"><span>Transfery między kontami:</span><span className="section-amount">{formatCurrency(stats.totalTransfers)}</span></div>}>
               <ul className="transfers-list">
                 {stats.transfers.length === 0 && <li style={{color:'#888'}}>Brak transferów</li>}
                 {stats.transfers.map(transfer => (
                   <li key={transfer.id} className="transfer-list-item">
-                    <span className="transfer-date">{formatDate(transfer.date)}</span>
-                    <span className="transfer-accounts">
-                      <span className="account-from">{transfer.fromAccount}</span>
-                      <span className="transfer-arrow"> → </span>
-                      <span className="account-to">{transfer.toAccount}</span>
-                    </span>
-                    <span className="transfer-amount">{formatCurrency(transfer.cost || transfer.amount)}</span>
-                    <span className="transfer-actions">
-                      <button title="Pokaż szczegóły" onClick={() => setTransferModal({isOpen:true, transaction:transfer})}>🔍</button>
-                      <button title="Edytuj transfer" onClick={() => handleEditTransfer(transfer)}>✏️</button>
-                      <button title="Cofnij transfer" onClick={() => handleUndoTransfer(transfer)}>↩️</button>
-                    </span>
+                    <div className="transfer-row">
+                      <span className="transfer-date">{formatDate(transfer.date)}</span>
+                      <span className="transfer-accounts">
+                        <span className="account-from">{transfer.fromAccount}</span>
+                        <span className="transfer-arrow">→</span>
+                        <span className="account-to">{transfer.toAccount}</span>
+                      </span>
+                    </div>
+                    <div className="transfer-row secondary">
+                      <span className="transfer-amount">{formatCurrency(transfer.cost || transfer.amount)}</span>
+                      <span className="transfer-actions">
+                        <button className="action-button" title="Pokaż szczegóły" onClick={() => setTransferModal({isOpen:true, transaction:transfer})}>🔍</button>
+                        <button className="action-button" title="Edytuj" onClick={() => handleEditTransfer(transfer)}>✏️</button>
+                        <button className="action-button" title="Cofnij" onClick={() => handleUndoTransfer(transfer)}>↩️</button>
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>

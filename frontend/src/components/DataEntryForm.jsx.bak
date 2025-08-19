@@ -16,6 +16,8 @@ const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shopp
             setTotalCost('');
         }
     }, [mainCategory]);
+        }
+    }, [mainCategory]);
     
     // Stałe, zdefiniowane od początku kategorie
     const baseCategories = useMemo(() => [ 
@@ -158,13 +160,7 @@ const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shopp
                 />
                 <button 
                     type="button" 
-                    onClick={() => {
-                        if (totalCost && parseFloat(totalCost) > 0) {
-                            setIsShoppingModalOpen(true);
-                        } else {
-                            alert('Wprowadź prawidłową kwotę całkowitą zakupów!');
-                        }
-                    }} 
+                    onClick={() => setIsShoppingModalOpen(true)} 
                     disabled={!totalCost || parseFloat(totalCost) <= 0} 
                     style={{marginTop: '10px'}}
                     className="breakdown-button"
@@ -409,7 +405,7 @@ function DataEntryForm({ onNewEntry }) {
         extraDescription: form.elements.extra_description.value,
     };
 
-    if (flowType === 'expense' && form.elements.mainCategory && form.elements.mainCategory.value === 'zakupy codzienne') {
+    if (flowType === 'expense' && mainCategory === 'zakupy codzienne') {
         if (!shoppingBreakdown || shoppingBreakdown.length === 0) {
             setResponseMessage({ text: 'Błąd: Rozbij paragon na podkategorie.', type: 'error' });
             return;

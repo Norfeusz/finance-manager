@@ -4,9 +4,13 @@
   padding: 15px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: relative;
-  z-index: 9500;
+  z-index: 10500;
   width: 100%;
   margin: 0;
+  /* Zawartość nie wymaga przewijania na poziomie formularza - zajmuje się tym modal-body */
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
 }
 
 .breakdown-form .summary {
@@ -16,11 +20,19 @@
   margin-bottom: 15px;
 }
 
+.breakdown-divider {
+  background-color: #ddd;
+  height: 2px;
+  border: none;
+  margin: 10px 0;
+}
+
 .breakdown-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 15px;
   margin-bottom: 20px;
+  padding-bottom: 10px;
 }
 
 .form-group {
@@ -46,6 +58,13 @@
   display: flex;
   justify-content: space-between;
   margin-top: 20px;
+  position: sticky;
+  bottom: 0;
+  background-color: white;
+  padding: 10px 0;
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
+  z-index: 10600; /* Wyższy z-index niż formularz */
+  width: 100%;
 }
 
 .actions button {
@@ -76,4 +95,169 @@
 
 .actions button:not(.primary):hover {
   background-color: #e1e1e1;
+}
+
+/* Style dla nowej podkategorii */
+.new-subcategory {
+  margin-top: 25px;
+  border-top: 2px solid #ddd;
+  padding-top: 20px;
+  width: 100%;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 20px 15px 15px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.add-subcategory-container {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.add-subcategory-container input {
+  flex: 1;
+  min-height: 42px;
+  min-width: 200px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 16px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.new-subcategory h3 {
+  display: block;
+  text-align: center;
+  font-weight: bold;
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+button.add-subcategory {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-weight: bold;
+  min-width: 100px;
+  height: 42px;
+  font-size: 16px;
+}
+
+button.add-subcategory:hover {
+  background-color: #45a049;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  transform: translateY(-1px);
+}
+
+button.add-subcategory:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+/* Style dla małych ekranów */
+@media (max-height: 700px) {
+  .summary {
+    margin-bottom: 10px;
+    padding: 5px;
+  }
+  
+  .summary p {
+    margin: 5px 0;
+  }
+  
+  .breakdown-grid {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .form-group {
+    margin-bottom: 5px;
+  }
+  
+  .form-group label {
+    margin-bottom: 3px;
+    font-size: 0.9em;
+  }
+  
+  .form-group input {
+    padding: 5px;
+  }
+  
+  .actions {
+    margin-top: 10px;
+  }
+  
+  .new-subcategory {
+    margin-top: 15px;
+    padding-top: 10px;
+  }
+  
+  .add-subcategory-container {
+    max-width: 450px;
+  }
+  
+  .add-subcategory-container input {
+    height: 38px;
+    padding: 5px 10px;
+    min-width: 180px;
+  }
+  
+  button.add-subcategory {
+    height: 38px;
+    padding: 5px 12px;
+    min-width: 90px;
+  }
+}
+
+/* Dodatkowe style dla bardzo małych ekranów */
+@media (max-height: 500px) {
+  .modal-content {
+    max-height: 95vh;
+  }
+
+  .modal-body {
+    max-height: 75vh;
+  }
+  
+  .breakdown-form {
+    padding: 10px;
+  }
+
+  .summary {
+    font-size: 0.9em;
+  }
+  
+  .new-subcategory {
+    margin-top: 15px;
+    padding: 15px 10px 10px;
+  }
+  
+  .new-subcategory h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+  
+  .add-subcategory-container {
+    gap: 8px;
+    flex-direction: column;
+  }
+  
+  .add-subcategory-container input {
+    width: 100%;
+    min-width: 100%;
+  }
+  
+  button.add-subcategory {
+    font-size: 15px;
+    min-width: 100%;
+    height: 40px;
+  }
 }

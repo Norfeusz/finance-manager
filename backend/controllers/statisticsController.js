@@ -69,6 +69,16 @@ const getShoppingStats = async (req, res) => {
                 'Elektronika': 'zakupy'
             };
             
+            // Funkcja do konwersji nazwy kategorii z bazy danych na nazwę używaną w fronendzie
+            const mapCategoryName = (dbCategoryName) => {
+                // Jeśli istnieje mapowanie, użyj go
+                if (categoryMapping[dbCategoryName]) {
+                    return categoryMapping[dbCategoryName];
+                }
+                // W przeciwnym razie użyj nazwy z bazy danych, ale z małej litery (frontend używa nazw z małej litery)
+                return dbCategoryName.toLowerCase();
+            };
+            
             // Mapowanie nazw podkategorii na nazwy używane w fronendzie
             const subcategoryMapping = {
                 'Podstawowe': 'jedzenie',
@@ -101,7 +111,7 @@ const getShoppingStats = async (req, res) => {
                 
                 // Dodaj sumy kategorii do wyniku
                 categoryStatsResult.rows.forEach(row => {
-                    const categoryKey = categoryMapping[row.category_name] || row.category_name.toLowerCase();
+                    const categoryKey = mapCategoryName(row.category_name);
                     resultObject[categoryKey] = parseFloat(row.total_amount);
                 });
                 

@@ -18,8 +18,62 @@ function EditTransactionModal({ isOpen, onClose, transaction, onSave, isTransfer
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Sprawdź saldo konta przed zapisaniem zmian
+    try {
+      if (isTransfer) {
+        // Dla transferów sprawdzamy konto źródłowe
+        const checkResponse = await fetch(`http://localhost:3001/api/accounts/check-balance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            account: formData.account,
+            amount: parseFloat(formData.cost),
+            excludeTransactionId: transaction.id  // Wykluczamy bieżący transfer z obliczeń
+          })
+        });
+        
+        const checkResult = await checkResponse.json();
+        
+        if (checkResponse.status === 200 && checkResult.willBeNegative) {
+          const proceedWithNegativeBalance = window.confirm(
+            `Po dokonaniu transferu, saldo konta "${formData.account}" spadnie poniżej zera (${checkResult.projectedBalance.toFixed(2)} zł). Czy na pewno chcesz zaakceptować ten transfer?`
+          );
+          
+          if (!proceedWithNegativeBalance) {
+            return;
+          }
+        }
+      } else if (parseFloat(formData.cost) > 0) {
+        // Dla wydatków sprawdzamy saldo konta
+        const checkResponse = await fetch(`http://localhost:3001/api/accounts/check-balance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            account: formData.account,
+            amount: parseFloat(formData.cost),
+            excludeTransactionId: transaction.id  // Wykluczamy bieżącą transakcję z obliczeń
+          })
+        });
+        
+        const checkResult = await checkResponse.json();
+        
+        if (checkResponse.status === 200 && checkResult.willBeNegative) {
+          const proceedWithNegativeBalance = window.confirm(
+            `Po dokonaniu wydatku, saldo konta "${formData.account}" spadnie poniżej zera (${checkResult.projectedBalance.toFixed(2)} zł). Czy na pewno chcesz zaakceptować ten wydatek?`
+          );
+          
+          if (!proceedWithNegativeBalance) {
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Błąd podczas sprawdzania salda konta:", error);
+      // Kontynuujemy mimo błędu sprawdzania, aby nie blokować funkcjonalności
+    }
     
     // Dla transferów, aktualizujemy opis jeśli zmieniono konto docelowe
     if (isTransfer) {

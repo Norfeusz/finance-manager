@@ -1,4 +1,4 @@
-// Skrypt do usunięcia wszystkich przepływów dla miesiąca sierpień 2025
+// Skrypt do usunięcia nieprawidłowych transferów dla miesiąca sierpień 2025
 const pool = require('../db/pool');
 
 async function deleteAugust2025Transactions() {
@@ -52,7 +52,7 @@ async function deleteAugust2025Transactions() {
         console.log(`${acc.name}: ${acc.current_balance}`);
       });
       
-      // 2. Pobierz wszystkie transakcje z sierpnia 2025 z pełnymi szczegółami
+      // 2. Pobierz tylko transakcję do "Nieznane konto" z sierpnia 2025
       const detailedTransactionsResult = await client.query(`
         SELECT 
           t.id, 
@@ -66,12 +66,14 @@ async function deleteAugust2025Transactions() {
         FROM transactions t
         JOIN accounts a ON t.account_id = a.id
         WHERE t.month_id = $1
+        AND t.type = 'transfer'
+        AND t.description = '→ Nieznane konto'
         ORDER BY t.date, t.id
       `, [monthId]);
       
-      console.log(`\nPrzywracam stany kont dla ${detailedTransactionsResult.rowCount} transakcji...`);
+      console.log(`\nPrzywracam stany kont dla ${detailedTransactionsResult.rowCount} transakcji do Nieznanego konta...`);
       
-      // 3. Iteruj przez każdą transakcję i wycofaj jej efekt na saldo konta
+      // 3. Iteruj przez każdą znalezioną transakcję i wycofaj jej efekt na saldo konta
       for (const transaction of detailedTransactionsResult.rows) {
         const { id, type, amount, account_id, account_name, description, extra_description } = transaction;
         
@@ -146,13 +148,17 @@ async function deleteAugust2025Transactions() {
         console.log(`${acc.name}: ${acc.current_balance}`);
       });
       
-      // Teraz usuń transakcje
+      // Usuń tylko transakcję transferu do "Nieznane konto"
       const deleteResult = await client.query(
-        'DELETE FROM transactions WHERE month_id = $1 RETURNING id',
+        `DELETE FROM transactions 
+         WHERE month_id = $1 
+         AND type = 'transfer' 
+         AND description = '→ Nieznane konto'
+         RETURNING id`,
         [monthId]
       );
       
-      console.log(`\nUsunięto ${deleteResult.rowCount} transakcji dla miesiąca sierpień 2025.`);
+      console.log(`\nUsunięto ${deleteResult.rowCount} transakcji do Nieznanego konta dla miesiąca sierpień 2025.`);
       
       // Opcjonalnie, jeśli chcesz również usunąć miesiąc z tabeli months
       // await client.query('DELETE FROM months WHERE id = $1', [monthId]);

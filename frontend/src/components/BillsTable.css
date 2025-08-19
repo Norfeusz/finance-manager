@@ -1,0 +1,207 @@
+.bills-table-container {
+    margin-top: 30px;
+    margin-bottom: 20px;
+}
+
+.bills-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.bills-table-container h3 {
+    margin-bottom: 0;
+    color: #333;
+}
+
+.account-balance-info {
+    display: flex;
+    align-items: center;
+}
+
+.balance-label {
+    margin-right: 5px;
+    font-weight: 600;
+}
+
+.balance-amount {
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: bold;
+    color: #28a745;
+}
+
+.bills-actions {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+.action-button {
+    padding: 15px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 24px; /* Większy rozmiar dla ikon */
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    min-width: 60px;
+    min-height: 60px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.deduct-button {
+    background-color: #007bff;
+    color: white;
+    border-color: #0062cc;
+}
+
+.deduct-button:hover {
+    background-color: #0069d9;
+    box-shadow: 0 4px 8px rgba(0,123,255,0.3);
+    transform: translateY(-2px);
+}
+
+.reset-button {
+    background-color: #6c757d;
+    color: white;
+    border-color: #5a6268;
+}
+
+.reset-button:hover {
+    background-color: #5a6268;
+    box-shadow: 0 4px 8px rgba(108,117,125,0.3);
+    transform: translateY(-2px);
+}
+
+.debug-button {
+    background-color: #17a2b8;
+    color: white;
+    border-color: #138496;
+}
+
+.debug-button:hover {
+    background-color: #138496;
+    box-shadow: 0 4px 8px rgba(23,162,184,0.3);
+    transform: translateY(-2px);
+}
+
+.bills-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.bills-table th {
+    background-color: #f2f2f2;
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid #ddd;
+    font-weight: 600;
+}
+
+.bills-table td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.bills-table tr:hover {
+    background-color: #f9f9f9;
+}
+
+.bills-table .amount-cell {
+    text-align: right;
+    font-weight: 500;
+}
+
+.empty-amount {
+    color: #dc3545;
+    font-style: italic;
+    font-weight: normal;
+}
+
+.amount-input {
+    width: 100px;
+    text-align: right;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.actions-cell {
+    text-align: center;
+    width: 100px;
+}
+
+.edit-button, .save-button, .cancel-button {
+    padding: 5px 10px;
+    margin: 0 2px;
+    border: 1px solid;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.edit-button {
+    color: #ffffff;
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.save-button {
+    color: #ffffff;
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.cancel-button {
+    color: #ffffff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.edit-button:hover, .save-button:hover, .cancel-button:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.total-label {
+    text-align: right;
+    font-weight: bold;
+}
+
+.total-amount {
+    text-align: right;
+    font-weight: bold;
+    color: #28a745;
+}
+
+/* Responsywne style dla małych ekranów */
+@media (max-width: 600px) {
+    .bills-table {
+        font-size: 0.9em;
+    }
+    
+    .bills-table th, 
+    .bills-table td {
+        padding: 8px;
+    }
+    
+    .amount-input {
+        width: 80px;
+    }
+}

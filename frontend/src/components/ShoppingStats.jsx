@@ -1,15 +1,24 @@
 import { useState, useEffect } from 'react';
 import CategoryDetailsModal from './CategoryDetailsModal';
+import './CategoryManagement.css';
 
 const formatCurrency = (amount) => (amount || 0).toFixed(2).replace('.', ',') + ' zł';
 
-const subCategories = ['jedzenie', 'słodycze', 'chemia', 'apteka', 'alkohol', 'higiena', 'kwiatki', 'zakupy'];
-const mainCategories = ['auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty'];
-const categoryDisplayNames = {
-    'jedzenie': 'Jedzenie', 'słodycze': 'Słodycze', 'chemia': 'Chemia', 'apteka': 'Apteka',
-    'alkohol': 'Alkohol', 'higiena': 'Higiena', 'kwiatki': 'Kwiatki', 'zakupy': 'Inne zakupy',
-    'auta': 'Auta', 'dom': 'Dom', 'wyjścia i szama do domu': 'Wyjścia / Jedzenie na mieście',
-    'pies': 'Pies', 'prezenty': 'Prezenty', 'zakupy codzienne': 'Zakupy codzienne (suma)'
+// Domyślne podkategorie dla zakupów codziennych
+const defaultSubCategories = ['jedzenie', 'słodycze', 'chemia', 'apteka', 'alkohol', 'higiena', 'kwiatki', 'zakupy'];
+const defaultMainCategories = ['auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty'];
+
+// Używamy tej zmiennej w komponencie - musi mieć zdefiniowaną wartość
+const subCategories = defaultSubCategories;
+
+// Funkcja która inicjalizuje mapę nazw kategorii
+const initCategoryDisplayNames = () => {
+    return {
+        'jedzenie': 'Jedzenie', 'słodycze': 'Słodycze', 'chemia': 'Chemia', 'apteka': 'Apteka',
+        'alkohol': 'Alkohol', 'higiena': 'Higiena', 'kwiatki': 'Kwiatki', 'zakupy': 'Inne zakupy',
+        'auta': 'Auta', 'dom': 'Dom', 'wyjścia i szama do domu': 'Wyjścia / Jedzenie na mieście',
+        'pies': 'Pies', 'prezenty': 'Prezenty', 'zakupy codzienne': 'Zakupy codzienne (suma)'
+    };
 };
 
 // ZMIANA TUTAJ: Komponent przyjmuje onDataChange
@@ -17,6 +26,122 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, category: '', transactions: [] });
+    // Stan do edycji nazwy kategorii
+    const [editingCategory, setEditingCategory] = useState(null);
+    const [editingCategoryName, setEditingCategoryName] = useState('');
+    
+    // Wczytaj zapisane kategorie z localStorage lub użyj domyślnych, jeśli ich nie ma
+    const [mainCategories, setMainCategories] = useState(() => {
+        try {
+            const savedCategories = localStorage.getItem('usedMainCategories');
+            return savedCategories ? JSON.parse(savedCategories) : defaultMainCategories;
+        } catch (e) {
+            console.error('Błąd wczytywania kategorii z localStorage:', e);
+            return defaultMainCategories;
+        }
+    });
+    
+    // Wczytaj zapisane podkategorie z localStorage lub użyj domyślnych
+    const [subCategories, setSubCategories] = useState(() => {
+        try {
+            const savedSubcategories = localStorage.getItem('userSubcategories');
+            return savedSubcategories 
+                ? [...defaultSubCategories, ...JSON.parse(savedSubcategories)] 
+                : defaultSubCategories;
+        } catch (e) {
+            console.error('Błąd wczytywania podkategorii z localStorage:', e);
+            return defaultSubCategories;
+        }
+    });
+    
+    const [categoryDisplayNames, setCategoryDisplayNames] = useState(() => {
+        try {
+            const savedNames = localStorage.getItem('categoryDisplayNames');
+            const savedSubNames = localStorage.getItem('subcategoryDisplayNames');
+            
+            let allNames = initCategoryDisplayNames();
+            if (savedNames) {
+                allNames = { ...allNames, ...JSON.parse(savedNames) };
+            }
+            if (savedSubNames) {
+                allNames = { ...allNames, ...JSON.parse(savedSubNames) };
+            }
+            
+            return allNames;
+        } catch (e) {
+            console.error('Błąd wczytywania nazw kategorii z localStorage:', e);
+            return initCategoryDisplayNames();
+        }
+    });
+
+    // Nasłuchiwanie na zdarzenia związane z podkategoriami
+    useEffect(() => {
+        const handleSubcategoryAdded = (event) => {
+            if (event.detail && event.detail.subcategory) {
+                // Aktualizuj listę podkategorii
+                setSubCategories(prevSubCategories => {
+                    if (!prevSubCategories.includes(event.detail.subcategory)) {
+                        return [...prevSubCategories, event.detail.subcategory];
+                    }
+                    return prevSubCategories;
+                });
+            }
+        };
+        
+        // Nasłuchuj zdarzenia dodania podkategorii
+        window.addEventListener('subcategoryAdded', handleSubcategoryAdded);
+        
+        return () => {
+            window.removeEventListener('subcategoryAdded', handleSubcategoryAdded);
+        };
+    }, []);
+
+    // Wykrywanie nowych kategorii z transakcji
+    useEffect(() => {
+        if (!transactions || transactions.length === 0) return;
+
+        // Znajdź wszystkie unikalne kategorie główne w transakcjach
+        const transactionCategories = [...new Set(
+            transactions
+                .filter(t => t.type === 'expense' && t.category !== 'zakupy codzienne')
+                .map(t => t.category)
+        )];
+
+        // Aktualizuj listę kategorii głównych
+        const newMainCategories = [...mainCategories]; // Używamy bieżących kategorii jako bazy
+        let categoriesChanged = false;
+        
+        // Dodaj nowe kategorie, które nie są jeszcze w głównych kategoriach
+        transactionCategories.forEach(category => {
+            if (category && !newMainCategories.includes(category) && !subCategories.includes(category)) {
+                newMainCategories.push(category);
+                categoriesChanged = true;
+            }
+        });
+
+        // Aktualizuj nazwy wyświetlania kategorii
+        const newCategoryDisplayNames = {...categoryDisplayNames};
+        let namesChanged = false;
+        
+        transactionCategories.forEach(category => {
+            if (category && !newCategoryDisplayNames[category]) {
+                // Dodaj nową kategorię do mapy nazw (pierwsza litera wielka)
+                newCategoryDisplayNames[category] = category.charAt(0).toUpperCase() + category.slice(1);
+                namesChanged = true;
+            }
+        });
+
+        // Zapisz tylko jeśli były zmiany
+        if (categoriesChanged) {
+            setMainCategories(newMainCategories);
+            localStorage.setItem('usedMainCategories', JSON.stringify(newMainCategories));
+        }
+        
+        if (namesChanged) {
+            setCategoryDisplayNames(newCategoryDisplayNames);
+            localStorage.setItem('categoryDisplayNames', JSON.stringify(newCategoryDisplayNames));
+        }
+    }, [transactions, categoryDisplayNames, mainCategories, subCategories]);
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -55,6 +180,68 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
     const handleCloseModal = () => {
         setModalInfo({ isOpen: false, category: '', transactions: [] });
     };
+    
+    // Funkcja do rozpoczęcia edycji nazwy kategorii
+    const handleEditCategory = (category) => {
+        setEditingCategory(category);
+        setEditingCategoryName(categoryDisplayNames[category] || category);
+    };
+    
+    // Funkcja do zapisywania zmienionej nazwy kategorii
+    const handleSaveCategory = (category) => {
+        // Aktualizacja nazwy w mapie nazw kategorii
+        const newCategoryDisplayNames = {...categoryDisplayNames};
+        newCategoryDisplayNames[category] = editingCategoryName;
+        setCategoryDisplayNames(newCategoryDisplayNames);
+        localStorage.setItem('categoryDisplayNames', JSON.stringify(newCategoryDisplayNames));
+        
+        // Wyemituj zdarzenie o zmianie kategorii dla innych komponentów
+        const customEvent = new CustomEvent('categoryNamesChanged', {
+            detail: { updatedNames: newCategoryDisplayNames }
+        });
+        window.dispatchEvent(customEvent);
+        
+        // Zakończ edycję
+        setEditingCategory(null);
+        setEditingCategoryName('');
+    };
+    
+    // Funkcja do anulowania edycji
+    const handleCancelEdit = () => {
+        setEditingCategory(null);
+        setEditingCategoryName('');
+    };
+    
+    // Funkcja do usuwania kategorii
+    const handleDeleteCategory = (category) => {
+        // Sprawdź czy w bieżącym miesiącu są wydatki w tej kategorii
+        const currentMonthValue = stats.currentMonth[category] || 0;
+        
+        if (currentMonthValue > 0) {
+            alert('Nie można usunąć kategorii. W bieżącym miesiącu są wydatki przypisane do tej kategorii.');
+            return;
+        }
+        
+        // Usuń kategorię z listy głównych kategorii
+        const newMainCategories = mainCategories.filter(cat => cat !== category);
+        setMainCategories(newMainCategories);
+        localStorage.setItem('usedMainCategories', JSON.stringify(newMainCategories));
+        
+        // Usuń z listy kategorii użytkownika w localStorage
+        try {
+            const userAddedCategories = JSON.parse(localStorage.getItem('userAddedCategories') || '[]');
+            const updatedUserCategories = userAddedCategories.filter(cat => cat !== category);
+            localStorage.setItem('userAddedCategories', JSON.stringify(updatedUserCategories));
+            
+            // Wyemituj zdarzenie o usunięciu kategorii
+            const customEvent = new CustomEvent('categoryDeleted', {
+                detail: { categoryName: category, updatedCategories: updatedUserCategories }
+            });
+            window.dispatchEvent(customEvent);
+        } catch (e) {
+            console.error('Błąd przy aktualizacji listy kategorii użytkownika:', e);
+        }
+    };
 
     if (loading) { return <div className="card"><h2>Statystyki wydatków</h2><p>Ładowanie statystyk...</p></div>; }
     if (!stats) { return <div className="card"><h2>Statystyki wydatków</h2><p>Brak danych do wyświetlenia.</p></div>; }
@@ -63,6 +250,9 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
         const currentValue = stats.currentMonth[catKey] || 0;
         const prevValue = stats.previousMonth[catKey] || 0;
         const avgValue = stats.historicalAverage[catKey] || 0;
+        
+        // Sprawdź, czy to nowa kategoria (dodana w bieżącym miesiącu)
+        const isNewCategory = prevValue === 0 && avgValue === 0 && (currentValue > 0 || mainCategories.includes(catKey) || subCategories.includes(catKey));
         
         // Kolor dla wartości bieżącego miesiąca
         let valueColor = '#333';
@@ -78,22 +268,134 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
             else prevValueColor = '#28a745';
         }
 
-        const isClickable = currentValue > 0;
+        // Wszystkie kategorie są teraz klikalne
 
+        // Sprawdź czy to kategoria dodana przez użytkownika (nie jest z domyślnych)
+        const isUserAddedCategory = mainCategories.includes(catKey) && !defaultMainCategories.includes(catKey);
+        
+        // Sprawdź czy to podkategoria dodana przez użytkownika (nie jest z domyślnych)
+        const isUserAddedSubcategory = subCategories.includes(catKey) && !defaultSubCategories.includes(catKey);
+        
+        // Funkcja do usuwania podkategorii
+        const handleDeleteSubcategory = (subcategory) => {
+            // Sprawdź czy w bieżącym miesiącu są wydatki w tej podkategorii
+            const currentMonthValue = stats.currentMonth[subcategory] || 0;
+            
+            if (currentMonthValue > 0) {
+                alert('Nie można usunąć podkategorii. W bieżącym miesiącu są wydatki przypisane do tej podkategorii.');
+                return;
+            }
+            
+            // Usuń podkategorię z listy
+            const newSubCategories = subCategories.filter(cat => cat !== subcategory);
+            setSubCategories(newSubCategories);
+            
+            // Usuń z listy podkategorii użytkownika w localStorage
+            try {
+                const userSubcategories = JSON.parse(localStorage.getItem('userSubcategories') || '[]');
+                const updatedUserSubcategories = userSubcategories.filter(cat => cat !== subcategory);
+                localStorage.setItem('userSubcategories', JSON.stringify(updatedUserSubcategories));
+                
+                // Wyemituj zdarzenie o usunięciu podkategorii
+                const customEvent = new CustomEvent('subcategoryDeleted', {
+                    detail: { subcategoryName: subcategory }
+                });
+                window.dispatchEvent(customEvent);
+            } catch (e) {
+                console.error('Błąd przy aktualizacji listy podkategorii użytkownika:', e);
+            }
+        };
+        
+        // Funkcja do zapisania zmiany nazwy podkategorii
+        const handleSaveSubcategory = (subcategory) => {
+            // Aktualizacja nazwy w mapie nazw kategorii
+            const newCategoryDisplayNames = {...categoryDisplayNames};
+            newCategoryDisplayNames[subcategory] = editingCategoryName;
+            setCategoryDisplayNames(newCategoryDisplayNames);
+            
+            // Zapisz oddzielnie nazwy podkategorii
+            try {
+                const subcategoryNames = {};
+                subCategories.forEach(cat => {
+                    if (newCategoryDisplayNames[cat]) {
+                        subcategoryNames[cat] = newCategoryDisplayNames[cat];
+                    }
+                });
+                localStorage.setItem('subcategoryDisplayNames', JSON.stringify(subcategoryNames));
+                localStorage.setItem('categoryDisplayNames', JSON.stringify(newCategoryDisplayNames));
+                
+                // Wyemituj zdarzenie o zmianie nazwy podkategorii
+                const customEvent = new CustomEvent('subcategoryNamesChanged', {
+                    detail: { updatedNames: newCategoryDisplayNames }
+                });
+                window.dispatchEvent(customEvent);
+            } catch (e) {
+                console.error('Błąd przy zapisywaniu nazw podkategorii:', e);
+            }
+            
+            // Zakończ edycję
+            setEditingCategory(null);
+            setEditingCategoryName('');
+        };
+        
+        // Renderuj pole nazwy kategorii z ikonami zarządzania (jeśli to kategoria użytkownika)
+        const renderCategoryName = () => {
+            if (editingCategory === catKey) {
+                return (
+                    <div className="edit-category-form">
+                        <input 
+                            type="text" 
+                            value={editingCategoryName} 
+                            onChange={(e) => setEditingCategoryName(e.target.value)} 
+                            autoFocus
+                        />
+                        <button className="save" onClick={() => {
+                            if (isUserAddedSubcategory) {
+                                handleSaveSubcategory(catKey);
+                            } else {
+                                handleSaveCategory(catKey);
+                            }
+                        }}>✓</button>
+                        <button className="cancel" onClick={handleCancelEdit}>✗</button>
+                    </div>
+                );
+            }
+            
+            return (
+                <div className="category-name">
+                    <span>{categoryDisplayNames[catKey] || catKey}</span>
+                    {(isUserAddedCategory || isUserAddedSubcategory) && (
+                        <div className="category-actions">
+                            <button className="edit" onClick={() => handleEditCategory(catKey)}>✎</button>
+                            <button className="delete" onClick={() => {
+                                if (isUserAddedSubcategory) {
+                                    handleDeleteSubcategory(catKey);
+                                } else {
+                                    handleDeleteCategory(catKey);
+                                }
+                            }}>🗑</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
         return (
             <tr key={catKey}>
-                <td className={subCategories.includes(catKey) ? 'subcategory' : ''}>{categoryDisplayNames[catKey] || catKey}</td>
+                <td className={subCategories.includes(catKey) ? 'subcategory' : ''}>
+                    {renderCategoryName()}
+                </td>
                 <td 
                     style={{ color: valueColor, fontWeight: 'bold' }}
-                    className={isClickable ? 'clickable-amount' : ''}
-                    onClick={isClickable ? () => handleCategoryClick(catKey) : undefined}
+                    className={'clickable-amount'}
+                    onClick={() => handleCategoryClick(catKey)}
                 >
                     {formatCurrency(currentValue)}
                 </td>
                 <td style={{ color: prevValueColor }}>
-                    {formatCurrency(prevValue)}
+                    {isNewCategory ? '-' : formatCurrency(prevValue)}
                 </td>
-                <td>{formatCurrency(avgValue)}</td>
+                <td>{isNewCategory ? '-' : formatCurrency(avgValue)}</td>
             </tr>
         );
     };

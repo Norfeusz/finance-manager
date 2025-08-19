@@ -1,5 +1,5 @@
 const { getGoogleSheets } = require('../config/googleSheets'); // Zachowujemy na razie, do migracji danych
-const { CATEGORY_CONFIG } = require('../config/categoryConfig');
+const { CATEGORY_CONFIG, addNewCategory } = require('../config/categoryConfig');
 const path = require('path');
 const pool = require('../db/pool');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
@@ -13,6 +13,65 @@ const addTransaction = async (req, res) => {
     
     try {
       await client.query('BEGIN');
+      
+      // Sprawdź stan kont przed dodaniem transakcji
+      for (const transaction of transactions) {
+        const { flowType, data } = transaction;
+        
+        if (flowType === 'expense') {
+          // Sprawdź saldo konta dla wydatku
+          const accountName = data.account;
+          const cost = parseFloat(data.cost || 0);
+          
+          if (accountName && cost > 0) {
+            // Pobierz aktualne saldo konta
+            const balanceRes = await client.query(`
+              SELECT a.name, COALESCE(ab.current_balance, 0) AS current_balance
+              FROM accounts a
+              LEFT JOIN account_balances ab ON a.id = ab.account_id
+              WHERE a.name = $1
+            `, [accountName]);
+            
+            if (balanceRes.rows.length > 0) {
+              const currentBalance = parseFloat(balanceRes.rows[0].current_balance);
+              const projectedBalance = currentBalance - cost;
+              
+              // Jeśli po transakcji saldo będzie ujemne, zwracamy błąd (ale tylko w API, frontend pokaże alert)
+              if (projectedBalance < 0 && !req.body.confirmNegativeBalance) {
+                if (req.headers['x-ignore-negative-balance'] !== 'true') {
+                  console.warn(`Ostrzeżenie: Wydatek spowodowałby ujemne saldo na koncie ${accountName} (${projectedBalance.toFixed(2)} zł)`);
+                }
+              }
+            }
+          }
+        } else if (flowType === 'transfer') {
+          // Sprawdź saldo konta dla transferu
+          const fromAccount = data.fromAccount;
+          const amount = parseFloat(data.amount || 0);
+          
+          if (fromAccount && amount > 0) {
+            // Pobierz aktualne saldo konta źródłowego
+            const balanceRes = await client.query(`
+              SELECT a.name, COALESCE(ab.current_balance, 0) AS current_balance
+              FROM accounts a
+              LEFT JOIN account_balances ab ON a.id = ab.account_id
+              WHERE a.name = $1
+            `, [fromAccount]);
+            
+            if (balanceRes.rows.length > 0) {
+              const currentBalance = parseFloat(balanceRes.rows[0].current_balance);
+              const projectedBalance = currentBalance - amount;
+              
+              // Jeśli po transakcji saldo będzie ujemne, zwracamy błąd (ale tylko w API, frontend pokaże alert)
+              if (projectedBalance < 0 && !req.body.confirmNegativeBalance) {
+                if (req.headers['x-ignore-negative-balance'] !== 'true') {
+                  console.warn(`Ostrzeżenie: Transfer spowodowałby ujemne saldo na koncie ${fromAccount} (${projectedBalance.toFixed(2)} zł)`);
+                }
+              }
+            }
+          }
+        }
+      }
       
       for (const transaction of transactions) {
         const { flowType, data } = transaction;
@@ -110,11 +169,19 @@ const addTransaction = async (req, res) => {
             
             let categoryId;
             if (categoryRes.rows.length === 0) {
+              // Dodajemy nową kategorię
               const newCategoryRes = await client.query(
                 'INSERT INTO categories (name) VALUES ($1) RETURNING id',
                 [dbCategoryName]
               );
               categoryId = newCategoryRes.rows[0].id;
+              
+              // Jeśli to jest nowa kategoria od użytkownika, zaktualizujmy konfigurację kategorii
+              if (data.isNewCategory) {
+                console.log(`Dodano nową kategorię: ${mainCategory}`);
+                // Dodaj nową kategorię do konfiguracji
+                addNewCategory(mainCategory);
+              }
             } else {
               categoryId = categoryRes.rows[0].id;
             }

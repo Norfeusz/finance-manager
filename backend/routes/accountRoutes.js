@@ -1,7 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
-const { getAccountBalances, updateAccountInitialBalance, recalculateAllAccountBalances } = require('../controllers/accountController');
+const { 
+    getAccountBalances, 
+    updateAccountInitialBalance, 
+    recalculateAllAccountBalances, 
+    checkAccountBalance,
+    updateAccountCurrentBalance
+} = require('../controllers/accountController');
 
 /**
  * GET /api/accounts/balances - pobieranie stanów wszystkich kont
@@ -17,6 +23,16 @@ router.post('/initial-balance', updateAccountInitialBalance);
  * POST /api/accounts/recalculate - przeliczanie wszystkich stanów kont
  */
 router.post('/recalculate', recalculateAllAccountBalances);
+
+/**
+ * POST /api/accounts/check-balance - sprawdzanie czy transakcja nie spowoduje ujemnego salda
+ */
+router.post('/check-balance', checkAccountBalance);
+
+/**
+ * PUT /api/accounts/current-balance - aktualizacja bieżącego salda konta
+ */
+router.put('/current-balance', updateAccountCurrentBalance);
 
 /**
  * GET /api/accounts - pobieranie wszystkich kont

@@ -1,0 +1,57 @@
+/* Style dla ikon zarządzania kategoriami */
+.category-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.category-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.category-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 5px;
+  color: #666;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.category-actions button.edit:hover {
+  color: #007bff;
+}
+
+.category-actions button.delete:hover {
+  color: #dc3545;
+}
+
+/* Style dla formularza edycji nazwy kategorii */
+.edit-category-form {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.edit-category-form input {
+  padding: 2px 4px;
+  width: 100px;
+}
+
+.edit-category-form button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  font-size: 14px;
+}
+
+.edit-category-form button.save {
+  color: #28a745;
+}
+
+.edit-category-form button.cancel {
+  color: #dc3545;
+}
