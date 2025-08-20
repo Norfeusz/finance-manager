@@ -517,7 +517,11 @@ function DataEntryForm({ onNewEntry }) {
         }
     } else if (flowType === 'transfer') {
         const fromAccount = form.elements.fromAccount.value;
+        const toAccount = form.elements.toAccount.value;
         const amount = parseFloat(form.elements.amount.value);
+
+        // Specjalna obsługa dla transferów na KWNR
+        const isKwnrTransfer = toAccount === 'KWNR';
         
         // Sprawdź saldo konta źródłowego przed wykonaniem transferu
         try {
@@ -549,6 +553,32 @@ function DataEntryForm({ onNewEntry }) {
     }
     
     try {
+        // Sprawdź czy to transfer do KWNR
+        if (flowType === 'transfer') {
+            const toAccount = form.elements.toAccount.value;
+            const fromAccount = form.elements.fromAccount.value;
+            const amount = parseFloat(form.elements.amount.value);
+            const date = form.elements.date.value;
+            const extraDescription = form.elements.extra_description?.value || '';
+
+            // Jeśli transfer idzie na konto KWNR, traktujemy go jako specjalny wydatek
+            if (toAccount === 'KWNR') {
+                // Modyfikujemy payload, aby traktować to jako wydatek z opisem "Transfer na KWNR"
+                payload = [{
+                    flowType: 'expense',
+                    data: {
+                        account: fromAccount,
+                        cost: amount.toString(),
+                        date: date,
+                        mainCategory: 'Transfer na KWNR',  // Używamy kategorii "Transfer na KWNR" 
+                        description: 'Transfer na KWNR',
+                        extra_description: extraDescription,
+                        isKwnrTransfer: true // Specjalny znacznik dla backendu
+                    }
+                }];
+            }
+        }
+
         const response = await fetch('http://localhost:3001/api/expenses', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

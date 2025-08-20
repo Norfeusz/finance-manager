@@ -8,6 +8,7 @@ const {
     checkAccountBalance,
     updateAccountCurrentBalance
 } = require('../controllers/accountController');
+const { getTransactions } = require('../controllers/transactionController');
 
 /**
  * GET /api/accounts/balances - pobieranie stanów wszystkich kont
@@ -18,6 +19,11 @@ router.get('/balances', getAccountBalances);
  * POST /api/accounts/initial-balance - aktualizacja stanu początkowego konta
  */
 router.post('/initial-balance', updateAccountInitialBalance);
+
+/**
+ * GET /api/accounts/:accountName/transactions - pobieranie transakcji dla konkretnego konta
+ */
+router.get('/:accountName/transactions', getTransactions);
 
 /**
  * POST /api/accounts/recalculate - przeliczanie wszystkich stanów kont

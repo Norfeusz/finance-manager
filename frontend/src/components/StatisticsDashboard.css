@@ -35,6 +35,20 @@
     color: #ea4335 !important;
 }
 
+.expenses-info {
+    margin-bottom: 15px;
+}
+
+.expenses-note {
+    background-color: #fff8e6;
+    border-left: 3px solid #fbbc04;
+    padding: 8px 12px;
+    margin: 0 0 15px 0;
+    font-size: 0.9em;
+    color: #5f6368;
+    border-radius: 0 4px 4px 0;
+}
+
 .small-button {
     background: none;
     border: none;
@@ -167,4 +181,38 @@
     opacity: 1;
 }
 
+/* Style dla listy kategorii wydatków */
+.category-list {
+    padding-left: 0;
+    list-style-type: none;
+    margin-top: 10px;
+}
+
+.category-item {
+    padding: 4px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    line-height: 1.5;
+    transition: background-color 0.2s;
+}
+
+.category-item:hover {
+    background-color: #f9f9f9;
+}
+
+.category-item strong {
+    font-weight: 600;
+    color: #333;
+    display: inline-block;
+}
+
+.category-list {
+    margin-bottom: 20px;
+}
+
+.category-amount {
+    text-align: right;
+}
 

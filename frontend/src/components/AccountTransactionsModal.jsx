@@ -43,7 +43,7 @@ function AccountTransactionsModal({ isOpen, onClose, accountName, transactions, 
     });
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Przepływy konta: ${accountName}`}>
+        <Modal isOpen={isOpen} onClose={onClose} title={accountName === 'KWNR' ? 'Konto wydatków nieregularnych' : `Przepływy konta: ${accountName}`}>
             <div className="account-transactions-list">
                 {/* Specjalna tabela dla konta Rachunki */}
                 {accountName === 'Rachunki' && (
@@ -54,13 +54,15 @@ function AccountTransactionsModal({ isOpen, onClose, accountName, transactions, 
                     />
                 )}
                 
-                {/* Specjalny widok dla konta KWNR */}
+                {/* Specjalny widok dla konta wydatków nieregularnych */}
                 {accountName === 'KWNR' && (
-                    <KwnrAccountView 
-                        transactions={transactions}
-                        key={transactions.length} // Wymuszenie rerender przy zmianie transakcji
-                        currentBalance={currentAccountBalance} // Przekazanie bieżącego salda z bazy danych
-                    />
+                    <>
+                        <KwnrAccountView 
+                            transactions={transactions}
+                            key={transactions.length} // Wymuszenie rerender przy zmianie transakcji
+                            currentBalance={currentAccountBalance} // Przekazanie bieżącego salda z bazy danych
+                        />
+                    </>
                 )}
                 
                 {/* Lista transakcji dla wszystkich kont (nie pokazujemy dla KWNR i Rachunki) */}

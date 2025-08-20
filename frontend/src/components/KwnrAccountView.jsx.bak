@@ -1,0 +1,980 @@
+import React, { useState, useEffect } from 'react';
+import './KwnrAccountView.css';
+import Modal from './Modal';
+
+function KwnrAccountView({ transactions: initialTransactions, currentBalance: initialBalance }) {
+    // Stan dla formularza dodawania wydatku
+    const [newExpense, setNewExpense] = useState({
+        name: '',
+        person: 'Gabi', // Domyślnie wybrana Gabi
+        amount: '',
+        date: new Date().toISOString().split('T')[0] // Dzisiejsza data jako domyślna
+    });
+    
+    // Stany do przechowywania danych lokalnie
+    const [transactions, setTransactions] = useState(initialTransactions || []);
+    const [currentBalance, setCurrentBalance] = useState(initialBalance || 0);
+    const [isLoading, setIsLoading] = useState(false);
+    
+    // Stan dla edycji wydatku
+    const [editingExpense, setEditingExpense] = useState(null);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [expenseToDelete, setExpenseToDelete] = useState(null);
+    
+    // Stan dla widoczności formularzy i modali
+    const [showExpenseForm, setShowExpenseForm] = useState(false);
+    const [showTransferForm, setShowTransferForm] = useState(false);
+    const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [selectedExpense, setSelectedExpense] = useState(null);
+    
+    // Funkcja pobierająca dane o transakcjach KWNR
+    const fetchKwnrData = async () => {
+        try {
+            setIsLoading(true);
+            const response = await fetch('http://localhost:3001/api/accounts/KWNR/transactions');
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Otrzymane dane z API:", JSON.stringify(data, null, 2));
+                setTransactions(data.transactions || []);
+                setCurrentBalance(data.balance || 0);
+            } else {
+                console.error('Błąd pobierania danych KWNR:', await response.text());
+            }
+        } catch (error) {
+            console.error('Błąd podczas pobierania danych KWNR:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    // Pobierz dane przy pierwszym renderowaniu
+    useEffect(() => {
+        fetchKwnrData();
+    }, []);
+    
+    // Aktualizuj dane przy zmianie props
+    useEffect(() => {
+        if (initialTransactions) {
+            setTransactions(initialTransactions);
+        }
+        if (initialBalance !== undefined) {
+            setCurrentBalance(initialBalance);
+        }
+    }, [initialTransactions, initialBalance]);
+    
+    // Stan dla formularza transferu
+    const [newTransfer, setNewTransfer] = useState({
+        type: 'wpływ',
+        source: 'Wspólne',
+        destination: 'Gabi',
+        amount: '',
+        date: new Date().toISOString().split('T')[0]
+    });
+    
+    // Funkcja obsługująca zmiany w formularzu
+    const handleExpenseChange = (e) => {
+        const { name, value } = e.target;
+        setNewExpense(prev => ({
+            ...prev,
+            [name]: name === 'amount' ? value.replace(/[^0-9.,]/g, '').replace(',', '.') : value
+        }));
+    };
+    
+    // Funkcje pomocnicze do edycji i usuwania wydatków
+    const startEditExpense = (expense) => {
+        console.log("Rozpoczynam edycję wydatku:", expense);
+        
+        // Ustawienie danych do edycji
+        setNewExpense({
+            name: expense.name || expense.description || '',
+            person: expense.person || expense.extra_description || 'Gabi',
+            amount: expense.amount ? expense.amount.toString() : '',
+            date: expense.date ? expense.date.includes('.') ? 
+                  expense.date.split('.').reverse().join('-') : expense.date : 
+                  new Date().toISOString().split('T')[0]
+        });
+        
+        setEditingExpense(expense);
+        setIsEditMode(true);
+        setShowExpenseForm(true);
+    };
+    
+    const startDeleteExpense = (expense) => {
+        console.log("Rozpoczynam usuwanie wydatku:", expense);
+        setExpenseToDelete(expense);
+        setShowDeleteConfirm(true);
+    };
+    
+    // Funkcja edytująca wydatek
+    const handleEditExpense = async (e) => {
+        e.preventDefault();
+        try {
+            if (!editingExpense) return;
+            
+            // Walidacja
+            if (!newExpense.name || !newExpense.person || !newExpense.amount || !newExpense.date) {
+                alert('Wypełnij wszystkie pola formularza');
+                return;
+            }
+            
+            const amount = parseFloat(newExpense.amount);
+            if (isNaN(amount) || amount <= 0) {
+                alert('Podaj prawidłową kwotę');
+                return;
+            }
+            
+            // Przygotowanie danych do aktualizacji
+            const selectedDate = newExpense.date;
+            console.log("Wybrana data przed wysłaniem (edycja):", selectedDate);
+            
+            const payload = {
+                original: editingExpense,
+                updated: {
+                    account: 'KWNR',
+                    cost: amount.toString(),
+                    date: selectedDate,
+                    description: newExpense.name,
+                    extra_description: newExpense.person,
+                    isKwnrExpense: true
+                }
+            };
+            
+            console.log("Dane do aktualizacji:", JSON.stringify(payload, null, 2));
+            
+            // Wysłanie żądania PUT
+            const response = await fetch('http://localhost:3001/api/expenses', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert(`Wydatek "${newExpense.name}" został zaktualizowany`);
+                
+                // Reset formularza i stanu edycji
+                setNewExpense({
+                    name: '',
+                    person: 'Gabi',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0]
+                });
+                setEditingExpense(null);
+                setIsEditMode(false);
+                setShowExpenseForm(false);
+                
+                // Odśwież dane
+                fetchKwnrData();
+            } else {
+                alert(`Błąd: ${result.message || 'Nie udało się zaktualizować wydatku'}`);
+            }
+        } catch (error) {
+            console.error('Błąd podczas aktualizacji wydatku:', error);
+            alert('Wystąpił błąd podczas aktualizacji wydatku');
+        }
+    };
+    
+    // Funkcja usuwająca wydatek
+    const handleDeleteExpense = async () => {
+        try {
+            if (!expenseToDelete) return;
+            
+            console.log("Usuwanie wydatku:", expenseToDelete);
+            
+            const response = await fetch('http://localhost:3001/api/expenses/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: expenseToDelete.id })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert("Wydatek został usunięty");
+                setShowDeleteConfirm(false);
+                setExpenseToDelete(null);
+                
+                // Odśwież dane po usunięciu
+                fetchKwnrData();
+            } else {
+                alert(`Błąd: ${result.message || 'Nie udało się usunąć wydatku'}`);
+            }
+        } catch (error) {
+            console.error('Błąd podczas usuwania wydatku:', error);
+            alert('Wystąpił błąd podczas usuwania wydatku');
+        }
+    };
+    
+    // Funkcja dodająca nowy wydatek do konta KWNR
+    const handleAddExpense = async (e) => {
+        e.preventDefault();
+        
+        // Walidacja
+        if (!newExpense.name || !newExpense.person || !newExpense.amount || !newExpense.date) {
+            alert('Wypełnij wszystkie pola formularza');
+            return;
+        }
+        
+        const amount = parseFloat(newExpense.amount);
+        if (isNaN(amount) || amount <= 0) {
+            alert('Podaj prawidłową kwotę');
+            return;
+        }
+        
+        try {
+            // Przygotowanie daty w formacie YYYY-MM-DD - zachowujemy datę bez strefy czasowej
+            // Jeśli użytkownik wybierze datę w formacie "2023-08-16", to dokładnie taka data
+            // zostanie wysłana do backendu, bez ryzyka przesunięcia przez strefę czasową
+            const selectedDate = newExpense.date;
+            console.log("Wybrana data przed wysłaniem:", selectedDate);
+            
+            // Tworzymy strukturę danych dla API - specjalny format dla wydatków KWNR
+            const payload = [{
+                flowType: 'expense',
+                data: {
+                    account: 'KWNR', // Konto KWNR
+                    cost: amount.toString(),
+                    date: selectedDate, // Używamy dokładnie tej samej daty, którą użytkownik wybrał
+                    mainCategory: 'Wydatek KWNR', // Kategoria dla wszystkich wydatków KWNR
+                    description: newExpense.name, // Nazwa wydatku dokładnie tak jak użytkownik wpisał w polu "za co"
+                    extra_description: newExpense.person, // Informacja o osobie - prosto, bez dodatkowego tekstu
+                    isKwnrExpense: true, // Specjalny znacznik dla backendu
+                    person: newExpense.person // Informacja o osobie
+                }
+            }];
+            
+            // Wysyłamy dane do API
+            // Log przed wysłaniem, aby sprawdzić co dokładnie wysyłamy
+            console.log("Wysyłam do API następujące dane:", JSON.stringify(payload, null, 2));
+            
+            const response = await fetch('http://localhost:3001/api/expenses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                // Wyświetl komunikat o sukcesie
+                alert(`Wydatek "${newExpense.name}" został dodany`);
+                
+                // Resetuj formularz
+                setNewExpense({
+                    name: '',
+                    person: 'Gabi',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0]
+                });
+                
+                // Zamknij formularz
+                setShowExpenseForm(false);
+                
+                // Logi debugowania - sprawdź, co zostało zapisane w bazie
+                console.log("Dodano wydatek, ID:", result.id || 'nieznane ID');
+                console.log("Wysłana data:", selectedDate);
+                console.log("Odświeżam dane z backendu...");
+                
+                // Odświeżenie danych z backendu po krótkim opóźnieniu, aby baza zdążyła przetworzyć zmiany
+                setTimeout(() => {
+                    fetchKwnrData();
+                }, 500);
+            } else {
+                alert(`Błąd: ${result.message || 'Nie udało się zapisać wydatku'}`);
+            }
+        } catch (error) {
+            console.error('Błąd podczas zapisywania wydatku:', error);
+            alert('Wystąpił błąd podczas zapisywania wydatku');
+        }
+    };
+    
+    // Funkcja do edycji wydatku
+    const handleEditExpense = async () => {
+        try {
+            if (!editingExpense) return;
+            
+            // Walidacja
+            if (!newExpense.name || !newExpense.person || !newExpense.amount || !newExpense.date) {
+                alert('Wypełnij wszystkie pola formularza');
+                return;
+            }
+            
+            const amount = parseFloat(newExpense.amount);
+            if (isNaN(amount) || amount <= 0) {
+                alert('Podaj prawidłową kwotę');
+                return;
+            }
+            
+            // Przygotowanie danych do aktualizacji
+            const selectedDate = newExpense.date;
+            console.log("Wybrana data przed wysłaniem (edycja):", selectedDate);
+            
+            const payload = {
+                original: editingExpense,
+                updated: {
+                    account: 'KWNR',
+                    cost: amount.toString(),
+                    date: selectedDate,
+                    description: newExpense.name,
+                    extra_description: newExpense.person,
+                    isKwnrExpense: true
+                }
+            };
+            
+            console.log("Dane do aktualizacji:", JSON.stringify(payload, null, 2));
+            
+            // Wysłanie żądania PUT
+            const response = await fetch('http://localhost:3001/api/expenses', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert(`Wydatek "${newExpense.name}" został zaktualizowany`);
+                
+                // Reset formularza i stanu edycji
+                setNewExpense({
+                    name: '',
+                    person: 'Gabi',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0]
+                });
+                setEditingExpense(null);
+                setIsEditMode(false);
+                setShowExpenseForm(false);
+                
+                // Odśwież dane
+                fetchKwnrData();
+            } else {
+                alert(`Błąd: ${result.message || 'Nie udało się zaktualizować wydatku'}`);
+            }
+        } catch (error) {
+            console.error('Błąd podczas aktualizacji wydatku:', error);
+            alert('Wystąpił błąd podczas aktualizacji wydatku');
+        }
+    };
+    
+    // Funkcja do usuwania wydatku
+    const handleDeleteExpense = async () => {
+        try {
+            if (!expenseToDelete) return;
+            
+            console.log("Usuwanie wydatku:", expenseToDelete);
+            
+            const response = await fetch('http://localhost:3001/api/expenses/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: expenseToDelete.id })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert("Wydatek został usunięty");
+                setShowDeleteConfirm(false);
+                setExpenseToDelete(null);
+                
+                // Odśwież dane po usunięciu
+                fetchKwnrData();
+            } else {
+                alert(`Błąd: ${result.message || 'Nie udało się usunąć wydatku'}`);
+            }
+        } catch (error) {
+            console.error('Błąd podczas usuwania wydatku:', error);
+            alert('Wystąpił błąd podczas usuwania wydatku');
+        }
+    };
+        }
+            console.log("Edytuję wydatek:", updatedExpense);
+            
+            // Przygotowanie danych do aktualizacji
+            const payload = {
+                id: selectedExpense.id,
+                date: updatedExpense.date,
+                account: 'KWNR',  // Zawsze konto KWNR
+                cost: parseFloat(updatedExpense.cost),
+                description: updatedExpense.description,
+                extra_description: updatedExpense.extraDescription || updatedExpense.person,
+                category: 'Wydatek KWNR',
+                isKwnrExpense: true // Oznaczamy, że to wydatek KWNR
+            };
+            
+            console.log("Wysyłam dane do aktualizacji:", payload);
+            
+            const response = await fetch(`http://localhost:3001/api/expenses/${selectedExpense.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (response.ok) {
+                alert("Wydatek został zaktualizowany");
+                setShowEditModal(false);
+                // Odśwież dane po edycji
+                fetchKwnrData();
+            } else {
+                const errorData = await response.json();
+                alert(`Błąd: ${errorData.message || 'Nie udało się zaktualizować wydatku'}`);
+            }
+        } catch (error) {
+            console.error("Błąd podczas edycji wydatku:", error);
+            alert("Wystąpił błąd podczas aktualizacji wydatku");
+        }
+    };
+    
+    // Funkcja do usuwania wydatku
+    const handleDeleteExpense = async () => {
+        try {
+            if (!selectedExpense || !selectedExpense.id) {
+                alert("Nie wybrano wydatku do usunięcia");
+                return;
+            }
+            
+            console.log("Usuwam wydatek o ID:", selectedExpense.id);
+            
+            const response = await fetch(`http://localhost:3001/api/expenses/${selectedExpense.id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.ok) {
+                alert("Wydatek został usunięty");
+                setShowDeleteConfirmModal(false);
+                // Odśwież dane po usunięciu
+                fetchKwnrData();
+            } else {
+                const errorData = await response.json();
+                alert(`Błąd: ${errorData.message || 'Nie udało się usunąć wydatku'}`);
+            }
+        } catch (error) {
+            console.error("Błąd podczas usuwania wydatku:", error);
+            alert("Wystąpił błąd podczas usuwania wydatku");
+        }
+    };
+    
+    // Funkcja obsługująca zmiany w formularzu transferu
+    const handleTransferChange = (e) => {
+        const { name, value } = e.target;
+        setNewTransfer(prev => ({
+            ...prev,
+            [name]: name === 'amount' ? value.replace(/[^0-9.,]/g, '').replace(',', '.') : value
+        }));
+    };
+    
+    // Pusta funkcja dodająca nowy transfer - będzie zaimplementowana od nowa
+    const handleAddTransfer = (e) => {
+        e.preventDefault();
+        alert('Funkcja dodawania transferów zostanie zaimplementowana od nowa');
+    };
+    // Funkcja pomocnicza do formatowania waluty
+    const formatCurrency = (value) => {
+        if (value === null || value === undefined) return '-';
+        return parseFloat(value).toLocaleString('pl-PL', { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+        }) + ' zł';
+    };
+    
+    // Funkcja rozpoczynająca edycję wydatku
+    const startEditExpense = (expense) => {
+        console.log("Rozpoczynam edycję wydatku:", expense);
+        
+        // Ustawienie danych do edycji
+        setNewExpense({
+            name: expense.name || expense.description || '',
+            person: expense.person || expense.extra_description || 'Gabi',
+            amount: expense.amount ? expense.amount.toString() : '',
+            date: expense.date ? expense.date.includes('.') ? 
+                  expense.date.split('.').reverse().join('-') : expense.date : 
+                  new Date().toISOString().split('T')[0]
+        });
+        
+        setEditingExpense(expense);
+        setIsEditMode(true);
+        setShowExpenseForm(true);
+    };
+    
+    // Funkcja rozpoczynająca usuwanie wydatku
+    const startDeleteExpense = (expense) => {
+        console.log("Rozpoczynam usuwanie wydatku:", expense);
+        setExpenseToDelete(expense);
+        setShowDeleteConfirm(true);
+    };
+
+    // Funkcja pomocnicza do formatowania daty
+    const formatDate = (dateString) => {
+        if (!dateString) return '-';
+        
+        console.log("Formatowanie daty:", dateString, "typu:", typeof dateString);
+        
+        // Jeśli data jest już w formacie DD.MM.YYYY, zwróć ją bez zmian
+        if (typeof dateString === 'string' && dateString.match(/^\d{2}\.\d{2}\.\d{4}$/)) {
+            console.log("Data już w odpowiednim formacie DD.MM.YYYY:", dateString);
+            return dateString;
+        }
+        
+        // Sprawdź czy data jest w formacie ISO (z T i Z)
+        if (typeof dateString === 'string' && dateString.includes('T')) {
+            const date = new Date(dateString);
+            console.log("Data ISO skonwertowana do obiektu Date:", date);
+            
+            // Używamy setUTCHours aby uniknąć efektu strefy czasowej
+            const utcDate = new Date(Date.UTC(
+                date.getFullYear(),
+                date.getMonth(),
+                date.getDate(),
+                12, 0, 0
+            ));
+            
+            const result = utcDate.toLocaleDateString('pl-PL', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                timeZone: 'UTC'
+            });
+            
+            console.log("Sformatowana data ISO:", result);
+            return result;
+        }
+        
+        // Jeśli data jest w formacie YYYY-MM-DD, zwróć ją w formacie DD.MM.YYYY
+        if (typeof dateString === 'string' && dateString.includes('-')) {
+            const [year, month, day] = dateString.split('-');
+            if (year && month && day) {
+                const result = `${day}.${month}.${year}`;
+                console.log("Skonwertowana data YYYY-MM-DD → DD.MM.YYYY:", result);
+                return result;
+            }
+        }
+        
+        // Jeśli doszliśmy tutaj, po prostu zwróć oryginalny string
+        console.log("Użyto domyślnego formatu daty:", dateString);
+        return dateString;
+    };
+
+    // Obliczenie sald i wydzielenie wydatków/transferów z transakcji
+    const [expenses, setExpenses] = useState([]);
+    const [transfers, setTransfers] = useState([]);
+    const [balances, setBalances] = useState({
+        gabi: 0,
+        norf: 0,
+        total: currentBalance || 0
+    });
+
+    // Przetwarzanie transakcji po ich otrzymaniu
+    useEffect(() => {
+        if (!transactions || transactions.length === 0) return;
+        
+        // Wyświetl otrzymane transakcje w konsoli dla debugowania
+        console.log("Otrzymane transakcje:", JSON.stringify(transactions, null, 2));
+        
+        // Podział transakcji na wydatki i transfery
+        const expensesList = [];
+        const transfersList = [];
+        
+        // Analizujemy transakcje i dzielimy na odpowiednie kategorie
+        transactions.forEach(transaction => {
+            console.log('Przetwarzam transakcję:', JSON.stringify(transaction, null, 2)); // Dokładny log transakcji
+            
+            if (transaction.type === 'expense' || transaction.category === 'Wydatek KWNR') {
+                // Tworzymy obiekt wydatku bezpośrednio na podstawie danych z transakcji
+                // Ważne jest, aby wszystkie pola były dokładnie takie, jakie otrzymujemy z backendu
+                const expenseObj = {
+                    id: transaction.id,
+                    // description - dokładnie to co użytkownik wpisał w polu "za co"
+                    name: transaction.description,
+                    // extra_description - dokładnie to co użytkownik wybrał w polu "kto"
+                    person: transaction.extra_description,
+                    // amount - kwota wydatku
+                    amount: parseFloat(transaction.amount),
+                    // date - data wydatku, używamy jej dokładnie tak jak przychodzi z backendu
+                    date: transaction.date
+                };
+                
+                console.log("Data wydatku przed formatowaniem:", transaction.date);
+                
+                // Jeśli data jest już w formacie DD.MM.YYYY, zachowujemy ją bez zmian
+                if (typeof transaction.date === 'string' && !transaction.date.match(/^\d{2}\.\d{2}\.\d{4}$/)) {
+                    // Zastosujmy formatowanie daty tylko jeśli nie jest już w formacie DD.MM.YYYY
+                    expenseObj.date = formatDate(transaction.date);
+                    console.log("Data wydatku po formatowaniu:", expenseObj.date);
+                }
+                
+                console.log('Dodaję wydatek do listy:', JSON.stringify(expenseObj, null, 2));
+                expensesList.push(expenseObj);
+            } else if (transaction.type === 'transfer' || transaction.type === 'income') {
+                // Dodajemy domyślne wartości, jeśli nie są obecne
+                transfersList.push({
+                    ...transaction,
+                    source: transaction.source || (transaction.description ? transaction.description.replace('Wpływ z: ', '') : 'Nieznane'),
+                    balanceAfter: transaction.balance_after || 0 // Używamy wartości z backendu
+                });
+            }
+        });
+        
+        // Obliczenie sald (to powinna robić strona serwerowa, ale dodajemy na wszelki wypadek)
+        let gabiBalance = 0;
+        let norfBalance = 0;
+        
+        expensesList.forEach(expense => {
+            const amount = parseFloat(expense.amount);
+            if (!isNaN(amount)) {
+                if (expense.person === 'Gabi') {
+                    gabiBalance += amount;
+                } else if (expense.person === 'Norf') {
+                    norfBalance += amount;
+                }
+            }
+        });
+        
+        setExpenses(expensesList);
+        setTransfers(transfersList);
+        setBalances({
+            gabi: gabiBalance,
+            norf: norfBalance,
+            total: currentBalance || 0
+        });
+    }, [transactions, currentBalance]);
+
+    return (
+        <div className="kwnr-account-container">
+            <div className="kwnr-section balances-section">
+                <div className="section-header">
+                    <h3>Saldo</h3>
+                </div>
+                <div className="balance-cards">
+                    <div className="balance-card gabi">
+                        <div className="person">Gabi</div>
+                        <div className="amount">{formatCurrency(balances.gabi)}</div>
+                    </div>
+                    <div className="balance-card norf">
+                        <div className="person">Norf</div>
+                        <div className="amount">{formatCurrency(balances.norf)}</div>
+                    </div>
+                    <div className="balance-card total">
+                        <div className="person">Saldo całkowite</div>
+                        <div className="amount">{formatCurrency(balances.total)}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="kwnr-section expenses-section">
+                <div className="section-header">
+                    <h3>Wydatki</h3>
+                    <button 
+                        className="add-button"
+                        onClick={() => {
+                            if (isEditMode) {
+                                // Jeśli jesteśmy w trybie edycji, to resetujemy wszystkie stany
+                                setIsEditMode(false);
+                                setEditingExpense(null);
+                                setNewExpense({
+                                    name: '',
+                                    person: 'Gabi',
+                                    amount: '',
+                                    date: new Date().toISOString().split('T')[0]
+                                });
+                            }
+                            setShowExpenseForm(!showExpenseForm);
+                        }}
+                    >
+                        {showExpenseForm ? 'Anuluj' : 'Dodaj wydatek'}
+                    </button>
+                </div>
+                
+                {showExpenseForm && (
+                    <form className="expense-form" onSubmit={isEditMode ? handleEditExpense : handleAddExpense}>
+                        <div className="form-group">
+                            <label htmlFor="expense-name">Za co:</label>
+                            <input
+                                id="expense-name"
+                                type="text"
+                                name="name"
+                                value={newExpense.name}
+                                onChange={handleExpenseChange}
+                                placeholder="Opisz wydatek"
+                                required
+                            />
+                        </div>
+                        
+                        <div className="form-group">
+                            <label htmlFor="expense-person">Kto:</label>
+                            <select
+                                id="expense-person"
+                                name="person"
+                                value={newExpense.person}
+                                onChange={handleExpenseChange}
+                                required
+                            >
+                                <option value="Gabi">Gabi</option>
+                                <option value="Norf">Norf</option>
+                            </select>
+                        </div>
+                        
+                        <div className="form-group">
+                            <label htmlFor="expense-amount">Kwota:</label>
+                            <input
+                                id="expense-amount"
+                                type="text"
+                                name="amount"
+                                value={newExpense.amount}
+                                onChange={handleExpenseChange}
+                                placeholder="0,00"
+                                required
+                            />
+                        </div>
+                        
+                        <div className="form-group">
+                            <label htmlFor="expense-date">Data:</label>
+                            <input
+                                id="expense-date"
+                                type="date"
+                                name="date"
+                                value={newExpense.date}
+                                onChange={handleExpenseChange}
+                                required
+                            />
+                        </div>
+                        
+                        <div className="form-actions">
+                            <button type="submit" className="save-expense-btn">
+                                {isEditMode ? 'Aktualizuj' : 'Zapisz'}
+                            </button>
+                            <button 
+                                type="button" 
+                                className="cancel-btn"
+                                onClick={() => {
+                                    setShowExpenseForm(false);
+                                    if (isEditMode) {
+                                        setIsEditMode(false);
+                                        setEditingExpense(null);
+                                        setNewExpense({
+                                            name: '',
+                                            person: 'Gabi',
+                                            amount: '',
+                                            date: new Date().toISOString().split('T')[0]
+                                        });
+                                    }
+                                }}
+                            >
+                                Anuluj
+                            </button>
+                        </div>
+                    </form>
+                )}
+                
+                <table className="kwnr-table expenses-table">
+                    <thead>
+                        <tr>
+                            <th>Wydatek</th>
+                            <th>Kto</th>
+                            <th>Kwota</th>
+                            <th>Data</th>
+                            <th>Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {expenses.length > 0 ? (
+                            expenses.map((expense) => {
+                                console.log("Renderowanie wydatku:", expense);
+                                return (
+                                    <tr key={expense.id}>
+                                        <td>{expense.name || expense.description || (expense.category ? expense.category.name : 'Wydatek')}</td>
+                                        <td>{expense.person || expense.extra_description || 'Nieznana'}</td>
+                                        <td className="amount-cell">{formatCurrency(expense.amount)}</td>
+                                        <td>{formatDate(expense.date) || '-'}</td>
+                                        <td>
+                                            <div className="action-buttons">
+                                                <button 
+                                                    className="action-btn edit-btn"
+                                                    onClick={() => startEditExpense(expense)}
+                                                    title="Edytuj wydatek"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    className="action-btn delete-btn"
+                                                    onClick={() => startDeleteExpense(expense)}
+                                                    title="Usuń wydatek"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })
+                        ) : (
+                            <tr>
+                                <td colSpan="5" className="no-data">Brak zarejestrowanych wydatków</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Modal potwierdzenia usunięcia */}
+            {showDeleteConfirm && (
+                <Modal
+                    title="Potwierdź usunięcie"
+                    onClose={() => setShowDeleteConfirm(false)}
+                >
+                    <div className="confirm-delete-modal">
+                        <p>Czy na pewno chcesz usunąć wydatek: <strong>{expenseToDelete?.name || expenseToDelete?.description}</strong> na kwotę {formatCurrency(expenseToDelete?.amount)}?</p>
+                        <div className="modal-actions">
+                            <button 
+                                className="btn-delete-confirm" 
+                                onClick={handleDeleteExpense}
+                            >
+                                Usuń
+                            </button>
+                            <button 
+                                className="btn-cancel" 
+                                onClick={() => setShowDeleteConfirm(false)}
+                            >
+                                Anuluj
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            <div className="kwnr-section transfers-section">
+                <div className="section-header">
+                    <h3>Transfery</h3>
+                    <div className="available-funds">
+                        <span>Dostępne środki:</span> 
+                        <span className="available-amount">{formatCurrency(balances.total)}</span>
+                    </div>
+                </div>
+                
+                {showTransferForm && (
+                    <form className="expense-form transfer-form" onSubmit={handleAddTransfer}>
+                        <div className="form-group">
+                            <label htmlFor="transfer-type">Typ:</label>
+                            <select
+                                id="transfer-type"
+                                name="type"
+                                value={newTransfer.type}
+                                onChange={handleTransferChange}
+                                required
+                            >
+                                <option value="wpływ">Wpływ</option>
+                                <option value="rozliczenie">Rozliczenie</option>
+                            </select>
+                        </div>
+                        
+                        {newTransfer.type === 'wpływ' ? (
+                            <div className="form-group">
+                                <label htmlFor="transfer-source">Źródło:</label>
+                                <select
+                                    id="transfer-source"
+                                    name="source"
+                                    value={newTransfer.source}
+                                    onChange={handleTransferChange}
+                                    required
+                                >
+                                    <option value="Wspólne">Wspólne</option>
+                                    <option value="Rachunki">Rachunki</option>
+                                    <option value="Gotówka">Gotówka</option>
+                                    <option value="Inne">Inne</option>
+                                </select>
+                            </div>
+                        ) : (
+                            <div className="form-group">
+                                <label htmlFor="transfer-destination">Dla kogo:</label>
+                                <select
+                                    id="transfer-destination"
+                                    name="destination"
+                                    value={newTransfer.destination}
+                                    onChange={handleTransferChange}
+                                    required
+                                >
+                                    <option value="Gabi">Gabi</option>
+                                    <option value="Norf">Norf</option>
+                                </select>
+                            </div>
+                        )}
+                        
+                        <div className="form-group">
+                            <label htmlFor="transfer-amount">Kwota:</label>
+                            <input
+                                id="transfer-amount"
+                                type="text"
+                                name="amount"
+                                value={newTransfer.amount}
+                                onChange={handleTransferChange}
+                                placeholder="0,00"
+                                required
+                            />
+                        </div>
+                        
+                        <div className="form-group">
+                            <label htmlFor="transfer-date">Data:</label>
+                            <input
+                                id="transfer-date"
+                                type="date"
+                                name="date"
+                                value={newTransfer.date}
+                                onChange={handleTransferChange}
+                                required
+                            />
+                        </div>
+                        
+                        <div className="form-actions">
+                            <button type="submit" className="save-expense-btn">Zapisz</button>
+                            <button 
+                                type="button" 
+                                className="cancel-btn"
+                                onClick={() => setShowTransferForm(false)}
+                            >
+                                Anuluj
+                            </button>
+                        </div>
+                    </form>
+                )}
+                
+                <table className="kwnr-table transfers-table">
+                    <thead>
+                        <tr>
+                            <th>Wpływ/Rozliczenie</th>
+                            <th>Skąd/Dokąd</th>
+                            <th>Kwota</th>
+                            <th>Bilans po</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {transfers.length > 0 ? (
+                            transfers.map((transfer) => (
+                                <tr key={transfer.id}>
+                                    <td>{transfer.type === 'income' ? 'Wpływ' : (transfer.type === 'expense' ? 'Rozliczenie' : transfer.type)}</td>
+                                    <td>{transfer.source || (transfer.description && transfer.description.replace('Wpływ z: ', '')) || transfer.destination || 'Nieznane'}</td>
+                                    <td className="amount-cell">{formatCurrency(transfer.amount)}</td>
+                                    <td className="amount-cell">{formatCurrency(transfer.balance_after || balances.total)}</td>
+                                    <td>{formatDate(transfer.date)}</td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan="5" className="no-data">Brak zarejestrowanych transferów</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+export default KwnrAccountView;

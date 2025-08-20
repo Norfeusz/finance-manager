@@ -119,6 +119,8 @@ const addTransaction = async (req, res) => {
           case 'expense': {
             const mainCategory = data.mainCategory;
             const subCategory = data.subCategory || null;
+            const isKwnrTransfer = data.isKwnrTransfer === true;
+            const isKwnrExpense = data.isKwnrExpense === true;
             
             // Mapowanie kategorii frontendu na kategorie bazy danych
             const categoryMapping = {
@@ -127,7 +129,10 @@ const addTransaction = async (req, res) => {
               'dom': 'Mieszkanie',
               'wyjścia i szama do domu': 'Rozrywka',
               'pies': 'Zwierzęta',
-              'prezenty': 'Prezenty'
+              'prezenty': 'Prezenty',
+              'Transfer': 'Transfer',  // Kategoria Transfer
+              'Transfer na KWNR': 'Transfer na KWNR',  // Dedykowana kategoria dla transferów na KWNR
+              'Wydatek KWNR': 'Wydatek KWNR'  // Dedykowana kategoria dla wydatków z konta KWNR
             };
             
             // Mapowanie podkategorii frontendu na podkategorie bazy danych
@@ -208,13 +213,229 @@ const addTransaction = async (req, res) => {
               }
             }
             
-            // Zapisz transakcję w bazie
-            await client.query(
-              `INSERT INTO transactions 
-               (month_id, account_id, category_id, subcategory_id, type, amount, description, extra_description, date)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-              [monthId, accountId, categoryId, subcategoryId, 'expense', parseFloat(data.cost), description, extraDescription || null, date]
-            );
+            // Sprawdź, czy to jest specjalny wydatek KWNR
+            console.log("Sprawdzam czy to wydatek KWNR:", data.isKwnrExpense);
+            
+            // Dla wydatków KWNR mamy osobną logikę przetwarzania, nie zapisujemy ich w tym miejscu
+            // Będą przetworzone później w sekcji dotyczącej KWNR
+            if (data.isKwnrExpense !== true) {
+              console.log("To NIE jest wydatek KWNR, przetwarzam standardowo");
+              
+              // Zapisz transakcję w bazie
+              const transactionResult = await client.query(
+                `INSERT INTO transactions 
+                 (month_id, account_id, category_id, subcategory_id, type, amount, description, extra_description, date)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 RETURNING id`,
+                [monthId, accountId, categoryId, subcategoryId, 'expense', parseFloat(data.cost), description, extraDescription || null, date]
+              );
+              
+              const transactionId = transactionResult.rows[0].id;
+              
+              // Pobierz aktualne saldo konta
+              const currentBalanceRes = await client.query(
+                'SELECT current_balance FROM account_balances WHERE account_id = $1',
+                [accountId]
+              );
+              
+              let currentBalance = 0;
+              if (currentBalanceRes.rows.length > 0) {
+                currentBalance = parseFloat(currentBalanceRes.rows[0].current_balance);
+              }
+              
+              // Oblicz nowe saldo po wydatku
+              const newBalance = currentBalance - parseFloat(data.cost);
+              
+              // Zaktualizuj pole balance_after w transakcji
+              await client.query(
+                'UPDATE transactions SET balance_after = $1 WHERE id = $2',
+                [newBalance, transactionId]
+              );
+            } else {
+              console.log("To JEST wydatek KWNR, będzie przetworzony w specjalnej sekcji");
+            }
+            
+            // Specjalne przetwarzanie dla transferów i wydatków na KWNR
+            if (data.isKwnrTransfer === true || data.isKwnrExpense === true) {
+              console.log(data.isKwnrTransfer ? "Wykryto transfer na KWNR" : "Wykryto wydatek KWNR");
+              
+              // Znajdź konto KWNR
+              let kwnrAccountRes = await client.query(
+                'SELECT id FROM accounts WHERE name = $1',
+                ['KWNR']
+              );
+              
+              let kwnrAccountId;
+              if (kwnrAccountRes.rows.length === 0) {
+                const newAccountRes = await client.query(
+                  'INSERT INTO accounts (name) VALUES ($1) RETURNING id',
+                  ['KWNR']
+                );
+                kwnrAccountId = newAccountRes.rows[0].id;
+              } else {
+                kwnrAccountId = kwnrAccountRes.rows[0].id;
+              }
+              
+              // Jeśli to wydatek KWNR, odrębne przetwarzanie
+              if (data.isKwnrExpense === true) {
+                console.log(`Przetwarzanie wydatku KWNR w wysokości ${parseFloat(data.cost)}`);
+                console.log("Dane wydatku KWNR:", JSON.stringify(data, null, 2));
+                
+                // Oblicz nowe saldo konta KWNR
+                const kwnrCurrentBalanceRes = await client.query(
+                  'SELECT current_balance FROM account_balances WHERE account_id = $1',
+                  [kwnrAccountId]
+                );
+                
+                let kwnrCurrentBalance = 0;
+                if (kwnrCurrentBalanceRes.rows.length > 0) {
+                  kwnrCurrentBalance = parseFloat(kwnrCurrentBalanceRes.rows[0].current_balance);
+                }
+                
+                const newKwnrBalance = kwnrCurrentBalance - parseFloat(data.cost);
+                
+                // Pobieramy dane bezpośrednio z obiektu data
+                const amount = parseFloat(data.cost);
+                const expenseName = data.description; // Nazwa wydatku - to co wpisał użytkownik w polu "za co"
+                const person = data.person; // Osoba - to co użytkownik wybrał w polu "kto"
+                const expenseDate = data.date; // Data - to co użytkownik wybrał w polu data
+                
+                console.log(`Zapisuję wydatek KWNR: "${expenseName}" dla osoby "${person}" na kwotę ${amount} z datą ${expenseDate}`);
+                
+                // Zachowujemy oryginalną datę z inputu, bez konwersji
+                let displayDate = expenseDate;
+                
+                // Rozwiązanie problemu przesunięcia czasowego - używamy oryginalnej daty z inputu
+                console.log(`Oryginalna data z formularza: ${expenseDate}`);
+                
+                // Zapisujemy datę dokładnie jak w formularzu (DATE) bez czasu
+                const dateToSave = expenseDate; // YYYY-MM-DD
+                console.log(`Przygotowana data (plain DATE) do zapisania w bazie: ${dateToSave}`);
+
+                // Dodajemy wydatek bezpośrednio do konta KWNR
+                const kwnrExpenseResult = await client.query(
+                  `INSERT INTO transactions 
+                   (month_id, account_id, category_id, type, amount, description, extra_description, date, balance_after)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8::date, $9)
+                   RETURNING id`,
+                  [monthId, kwnrAccountId, categoryId, 'expense', amount, 
+                   expenseName, person, // Dokładnie wartości z formularza
+                   dateToSave, newKwnrBalance]
+                );
+                
+                console.log("Wydatek KWNR został zapisany z ID:", kwnrExpenseResult.rows[0].id);
+                
+                // Aktualizuj saldo konta KWNR
+                const kwnrBalanceCheck = await client.query(
+                  'SELECT id FROM account_balances WHERE account_id = $1',
+                  [kwnrAccountId]
+                );
+                
+                if (kwnrBalanceCheck.rows.length === 0) {
+                  // Jeśli nie ma jeszcze wpisu dla salda KWNR, utwórz nowy (startując od ujemnej kwoty wydatku)
+                  await client.query(`
+                    INSERT INTO account_balances (account_id, initial_balance, current_balance)
+                    VALUES ($1, $2, $2)
+                  `, [kwnrAccountId, -parseFloat(data.cost)]);
+                } else {
+                  // Aktualizuj istniejące saldo - odejmujemy kwotę wydatku
+                  await client.query(`
+                    UPDATE account_balances 
+                    SET current_balance = current_balance - $1,
+                        last_updated = NOW()
+                    WHERE account_id = $2
+                  `, [parseFloat(data.cost), kwnrAccountId]);
+                }
+                
+                // Dla wydatków KWNR nie aktualizujemy innych kont, więc kończymy tutaj przetwarzanie
+                continue;
+              }
+              
+              // Oblicz nowe saldo po transferze
+              const kwnrCurrentBalanceRes = await client.query(
+                'SELECT current_balance FROM account_balances WHERE account_id = $1',
+                [kwnrAccountId]
+              );
+              
+              let kwnrCurrentBalance = 0;
+              if (kwnrCurrentBalanceRes.rows.length > 0) {
+                kwnrCurrentBalance = parseFloat(kwnrCurrentBalanceRes.rows[0].current_balance);
+              }
+              
+              const newKwnrBalance = kwnrCurrentBalance + parseFloat(data.cost);
+              
+              // Dodaj wpływ na konto KWNR bez duplikacji
+              console.log(`Dodaję wpływ na konto KWNR w wysokości ${parseFloat(data.cost)}...`);
+              console.log(`Data wybrana w formularzu: ${data.date}`);
+              
+              // Używamy dokładnie tej samej daty, która została wybrana w formularzu
+              const selectedDate = data.date;
+              console.log(`Oryginalna data transferu: ${selectedDate}`);
+              
+              // Znajdź ID konta źródłowego
+              const sourceAccountRes = await client.query(
+                'SELECT id, name FROM accounts WHERE name = $1',
+                [data.account]
+              );
+              
+              const sourceAccountId = sourceAccountRes.rows.length > 0 ? sourceAccountRes.rows[0].id : null;
+              const sourceAccountName = sourceAccountRes.rows.length > 0 ? sourceAccountRes.rows[0].name : data.account;
+              
+              // Zapisujemy samą datę (bez czasu) aby uniknąć przesunięcia o 1 dzień
+              const dateToSave = selectedDate; // format YYYY-MM-DD z formularza
+              console.log(`Przygotowana data transferu do zapisania (bez czasu): ${dateToSave}`);
+              
+              try {
+                // Dodajemy dodatkowe pola: source_account_id i source_account_name
+                await client.query(
+                  `INSERT INTO transactions 
+                  (month_id, account_id, type, amount, description, extra_description, date, source_account_id, source_account_name)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, $9)`,
+                  [monthId, kwnrAccountId, 'income', parseFloat(data.cost), `Wpływ z: ${data.account}`, 
+                  `Transfer z konta ${data.account}`, dateToSave, sourceAccountId, sourceAccountName]
+                );
+                console.log("Transfer do KWNR zapisany pomyślnie z informacją o źródle");
+                const dbg = await client.query('SELECT id, date FROM transactions WHERE account_id = $1 ORDER BY id DESC LIMIT 1',[kwnrAccountId]);
+                console.log('[DBG STORED KWNR TRANSFER DATE]', dbg.rows[0]);
+              } catch (error) {
+                // Jeśli wystąpił błąd, spróbuj zapisać bez nowych kolumn
+                console.error("Błąd podczas zapisywania z source_account_id:", error);
+                console.log("Próbuję zapisać bez nowych kolumn...");
+                
+                await client.query(
+                  `INSERT INTO transactions 
+                  (month_id, account_id, type, amount, description, extra_description, date)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7::date)`,
+                  [monthId, kwnrAccountId, 'income', parseFloat(data.cost), `Wpływ z: ${data.account}`, 
+                  `Transfer z konta ${data.account}`, dateToSave]
+                );
+                console.log("Transfer do KWNR zapisany bez informacji o źródle");
+                const dbg2 = await client.query('SELECT id, date FROM transactions WHERE account_id = $1 ORDER BY id DESC LIMIT 1',[kwnrAccountId]);
+                console.log('[DBG STORED KWNR TRANSFER DATE - fallback]', dbg2.rows[0]);
+              }
+              
+              // Aktualizuj saldo konta KWNR
+              const kwnrBalanceCheck = await client.query(
+                'SELECT id, current_balance FROM account_balances WHERE account_id = $1',
+                [kwnrAccountId]
+              );
+              
+              if (kwnrBalanceCheck.rows.length === 0) {
+                // Jeśli nie ma jeszcze wpisu dla salda KWNR, utwórz nowy
+                await client.query(`
+                  INSERT INTO account_balances (account_id, initial_balance, current_balance)
+                  VALUES ($1, $2, $2)
+                `, [kwnrAccountId, parseFloat(data.cost)]);
+              } else {
+                // Aktualizuj istniejące saldo
+                await client.query(`
+                  UPDATE account_balances 
+                  SET current_balance = current_balance + $1,
+                      last_updated = NOW()
+                  WHERE account_id = $2
+                `, [parseFloat(data.cost), kwnrAccountId]);
+              }
+            }
             
             // Sprawdź czy istnieje wpis w account_balances dla tego konta
             const balanceCheck = await client.query(
@@ -558,6 +779,10 @@ const addTransaction = async (req, res) => {
 
 const deleteTransaction = async (req, res) => {
     try {
+        console.log('=== deleteTransaction - body:', JSON.stringify(req.body));
+        console.log('=== deleteTransaction - metoda HTTP:', req.method);
+        console.log('=== deleteTransaction - headers:', JSON.stringify(req.headers));
+        
         const { id } = req.body;
         
         console.log(`=== Rozpoczynam proces usuwania transakcji o ID: ${id} ===`);
@@ -646,6 +871,38 @@ const deleteTransaction = async (req, res) => {
                     `, [amount, accountId]);
                     
                     console.log(`Przywrócono saldo na koncie ${accountName}, dodano kwotę ${amount}`);
+
+          // DODATKOWO: jeśli ten wydatek był "Transfer na KWNR" (isKwnrTransfer przypadek), usuń odpowiadający income "Wpływ z: {accountName}" z konta KWNR
+          // Rozpoznaj po opisie lub kategorii
+          if (transaction.description === 'Transfer na KWNR') {
+            console.log('Wykryto usuwanie wydatku typu Transfer na KWNR – próbuję znaleźć i usunąć powiązany wpływ na KWNR.');
+            const kwnrIncomeRes = await client.query(`
+              SELECT t.id, t.amount FROM transactions t
+              JOIN accounts a ON t.account_id = a.id
+              WHERE t.type = 'income'
+                AND a.name = 'KWNR'
+                AND t.description = $1
+                AND DATE(t.date) = DATE($2)
+              ORDER BY t.id DESC
+              LIMIT 1
+            `, [`Wpływ z: ${accountName}`, transaction.date]);
+            console.log('Znaleziono potencjalnych wpływów na KWNR:', kwnrIncomeRes.rows.length);
+            if (kwnrIncomeRes.rows.length > 0) {
+              const kIncome = kwnrIncomeRes.rows[0];
+              console.log('Usuwam powiązany wpływ na KWNR ID:', kIncome.id, 'kwota:', kIncome.amount);
+              await client.query('DELETE FROM transactions WHERE id = $1', [kIncome.id]);
+              // Korekta salda KWNR (odejmujemy wpływ, który wcześniej zwiększał saldo)
+              await client.query(`
+                UPDATE account_balances ab
+                SET current_balance = current_balance - $1, last_updated = NOW()
+                FROM accounts a
+                WHERE a.id = ab.account_id AND a.name = 'KWNR'
+              `, [kIncome.amount]);
+              console.log('Skorygowano saldo KWNR po usunięciu powiązanego wpływu.');
+            } else {
+              console.log('Nie znaleziono powiązanego wpływu na KWNR do usunięcia.');
+            }
+          }
                 } else {
                     // Standardowe konto - przywracamy środki
                     await client.query(`
@@ -656,6 +913,18 @@ const deleteTransaction = async (req, res) => {
                     `, [amount, accountId]);
                     
                     console.log(`Przywrócono saldo na standardowym koncie ${accountName}, dodano kwotę ${amount}`);
+                    
+                    // Sprawdź czy to jest wydatek KWNR (specjalna kategoria)
+                    const categoryResult = await client.query(
+                        `SELECT c.name FROM categories c 
+                         JOIN transactions t ON t.category_id = c.id 
+                         WHERE t.id = $1`,
+                        [id]
+                    );
+                    
+                    if (categoryResult.rows.length > 0 && categoryResult.rows[0].name === 'Wydatek KWNR') {
+                        console.log(`Wykryto wydatek KWNR - usuwanie z konta ${accountName}`);
+                    }
                 }
             } 
             else if (transaction.type === 'income') {
@@ -1082,6 +1351,24 @@ const updateTransaction = async (req, res) => {
                 }
             }
             
+            // Przygotuj wartości do aktualizacji transakcji
+            const updatedDescription = updated.description || original.description;
+            const updatedExtraDescription = updated.extra_description || updated.extraDescription || original.extra_description || original.extraDescription;
+            
+            console.log('Aktualizacja transakcji, dane:');
+            console.log('- ID: ', original.id);
+            console.log('- Konto ID: ', updatedAccountId);
+            console.log('- Kwota: ', updatedAmount);
+            console.log('- Opis: ', updatedDescription);
+            console.log('- Extra opis (kto): ', updatedExtraDescription);
+            console.log('- Data: ', updated.date || original.date);
+            console.log('Oryginalne pola:');
+            console.log('- original.extra_description: ', original.extra_description);
+            console.log('- original.extraDescription: ', original.extraDescription);
+            console.log('Zaktualizowane pola:');
+            console.log('- updated.extra_description: ', updated.extra_description);
+            console.log('- updated.extraDescription: ', updated.extraDescription);
+            
             // Aktualizuj transakcję w bazie danych
             await client.query(`
                 UPDATE transactions 
@@ -1094,8 +1381,8 @@ const updateTransaction = async (req, res) => {
             `, [
                 updatedAccountId, 
                 updatedAmount, 
-                updated.description || original.description, 
-                updated.extraDescription || original.extraDescription,
+                updatedDescription, 
+                updatedExtraDescription,
                 updated.date || original.date,
                 original.id
             ]);

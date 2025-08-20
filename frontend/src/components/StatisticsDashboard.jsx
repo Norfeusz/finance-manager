@@ -154,10 +154,10 @@ function StatisticsDashboard({ transactions }) {
       if (t.type === 'expense') {
         return acc - Number(t.cost || 0);
       }
-      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      // Transfery na konto "Rachunki" traktujemy jak wydatki
       if (t.type === 'transfer' && 
-          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
-           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+          (t.description && t.description.includes('Transfer do: Rachunki') ||
+           t.toAccount === 'Rachunki')) {
         return acc - Number(t.cost || t.amount || 0);
       }
       return acc;
@@ -168,11 +168,11 @@ function StatisticsDashboard({ transactions }) {
       if (t.type === 'income' && !isBalanceExpenseIncome(t)) acc[accName] += Number(t.cost || t.amount || 0);
       if (t.type === 'expense') acc[accName] -= Number(t.cost || 0);
       return acc;
-    }, { 'Wspólne': 0, 'Gotówka': 0, 'Oszczędnościowe': 0, 'Rachunki': 0, 'KWNR': 0 }),
+    }, { 'Wspólne': 0, 'Gotówka': 0, 'Oszczędnościowe': 0, 'Rachunki': 0 }),
     // Obliczanie sumy wszystkich kont - na podstawie danych z tabeli account_balances
     totalAccountsBalance: accountBalances.reduce((sum, account) => sum + parseFloat(account.current_balance || 0), 0),
     // Bilans miesiąca - różnica między wpływami a wydatkami w danym miesiącu
-    // Teraz uwzględniamy transfery na konto "Rachunki" i "KWNR" jako wydatki
+    // Uwzględniamy transfery na konto "Rachunki" jako wydatki
     monthlyBalance: transactions.reduce((acc, t) => {
       if (t.type === 'income' && !isBalanceExpenseIncome(t)) {
         return acc + Number(t.cost || t.amount || 0);
@@ -180,38 +180,46 @@ function StatisticsDashboard({ transactions }) {
       if (t.type === 'expense') {
         return acc - Number(t.cost || 0);
       }
-      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      // Transfery na konto "Rachunki" traktujemy jak wydatki
       if (t.type === 'transfer' && 
-          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
-           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+          (t.description && t.description.includes('Transfer do: Rachunki') ||
+           t.toAccount === 'Rachunki')) {
         return acc - Number(t.cost || t.amount || 0);
       }
       return acc;
     }, 0),
-    // Założony bilans miesiąca - różnica między budżetem a wydatkami (uwzględniając transfery na Rachunki i KWNR)
+    // Założony bilans miesiąca - różnica między budżetem a wydatkami (uwzględniając transfery na Rachunki)
     monthlyBudgetBalance: monthBudget - transactions.reduce((acc, t) => {
       if (t.type === 'expense') {
         return acc + Number(t.cost || 0);
       }
-      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      // Transfery na konto "Rachunki" traktujemy jak wydatki
       if (t.type === 'transfer' && 
-          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
-           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+          (t.description && t.description.includes('Transfer do: Rachunki') ||
+           t.toAccount === 'Rachunki')) {
         return acc + Number(t.cost || t.amount || 0);
       }
       return acc;
     }, 0),
     // Suma wpływów z wyłączeniem tych generowanych opcją "bilansujemy wydatek"
     totalIncome: transactions.filter(t => t.type === 'income' && !isBalanceExpenseIncome(t)).reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0),
-    // W sumie wydatków uwzględniamy także transfery na konto "Rachunki" i "KWNR"
+    // W sumie wydatków uwzględniamy także transfery na konto "Rachunki"
     totalExpenses: transactions.reduce((acc, t) => {
-      if (t.type === 'expense') {
+      // Wykluczamy wydatki KWNR oraz wydatki będące transferem na KWNR
+      if (t.type === 'expense' && 
+          t.category !== 'Transfer na KWNR' &&
+          t.mainCategory !== 'Transfer na KWNR' &&
+          t.description !== 'Transfer na KWNR' &&
+          !t.isKwnrExpense && 
+          t.category !== 'Wydatek KWNR' && 
+          t.mainCategory !== 'Wydatek KWNR' &&
+          !(t.description === 'KWNR' || (t.account && t.account === 'KWNR'))) {
         return acc + Number(t.cost || 0);
       }
-      // Transfery na konto "Rachunki" lub "KWNR" traktujemy jak wydatki
+      // Transfery na konto "Rachunki" traktujemy jak wydatki
       if (t.type === 'transfer' && 
-          (t.description && (t.description.includes('Transfer do: Rachunki') || t.description.includes('Transfer do: KWNR')) ||
-           t.toAccount === 'Rachunki' || t.toAccount === 'KWNR')) {
+          (t.description && t.description.includes('Transfer do: Rachunki') ||
+           t.toAccount === 'Rachunki')) {
         return acc + Number(t.cost || t.amount || 0);
       }
       return acc;
@@ -219,29 +227,27 @@ function StatisticsDashboard({ transactions }) {
     // Transfery i ich suma
     transfers: filteredTransfers,
     totalTransfers: totalTransfersAmount,
-    // Wydatki według kategorii, uwzględniające transfery na konto "Rachunki" i "KWNR"
+    // Wydatki według kategorii, uwzględniające transfery na konto "Rachunki" ale wykluczające wydatki KWNR
     expenseByCategory: transactions.reduce((acc, t) => {
-      // Standardowe wydatki
-      if (t.type === 'expense') {
-        const category = t.category || 'Inne';
+      // Standardowe wydatki, ale wykluczamy wydatki KWNR oraz transfery na KWNR
+      if (t.type === 'expense' && 
+          t.category !== 'Transfer na KWNR' &&
+          t.mainCategory !== 'Transfer na KWNR' &&
+          t.description !== 'Transfer na KWNR' &&
+          !t.isKwnrExpense && 
+          t.category !== 'Wydatek KWNR' && 
+          t.mainCategory !== 'Wydatek KWNR' &&
+          !(t.description === 'KWNR' || (t.account && t.account === 'KWNR'))) {
+        let category = t.category || 'Inne';
         if (!acc[category]) acc[category] = 0;
         acc[category] += Number(t.cost || 0);
       }
       
       // Transfery na konto "Rachunki" traktujemy jak wydatki w kategorii "Transfer na Rachunki"
-      if (t.type === 'transfer' && 
-          (t.description && t.description.includes('Transfer do: Rachunki') ||
-           t.toAccount === 'Rachunki')) {
+    if (t.type === 'transfer' && 
+      (t.description && t.description.includes('Transfer do: Rachunki') ||
+       t.toAccount === 'Rachunki')) {
         const category = 'Transfer na Rachunki';
-        if (!acc[category]) acc[category] = 0;
-        acc[category] += Number(t.cost || t.amount || 0);
-      }
-      
-      // Transfery na konto "KWNR" traktujemy jak wydatki w kategorii "Transfer na KWNR"
-      if (t.type === 'transfer' && 
-          (t.description && t.description.includes('Transfer do: KWNR') ||
-           t.toAccount === 'KWNR')) {
-        const category = 'Transfer na KWNR';
         if (!acc[category]) acc[category] = 0;
         acc[category] += Number(t.cost || t.amount || 0);
       }
@@ -514,13 +520,17 @@ function StatisticsDashboard({ transactions }) {
                 ))}
               </ul>
             </CollapsibleSection>
+            
             <CollapsibleSection title={<div className="section-title"><span>Suma wydatków:</span><span className="section-amount">{formatCurrency(stats.totalExpenses)}</span></div>}>
-              <ul>
-                {Object.entries(stats.expenseByCategory).map(([category, total]) => (
-                  <li key={category} onClick={() => handleCategoryClick(category)} className="clickable-category">
-                    <strong>{category}:</strong> {formatCurrency(total)}
-                  </li>
-                ))}
+              <ul className="category-list">
+                {Object.entries(stats.expenseByCategory)
+                  .sort((a, b) => b[1] - a[1]) // Sortowanie malejąco według kwoty
+                  .map(([category, amount]) => (
+                    <li key={category} onClick={() => handleCategoryClick(category)} className="category-item">
+                      <strong>{category}</strong>
+                      <span className="category-amount">{formatCurrency(amount)}</span>
+                    </li>
+                  ))}
               </ul>
             </CollapsibleSection>
             <CollapsibleSection title={<div className="section-title"><span>Transfery między kontami:</span><span className="section-amount">{formatCurrency(stats.totalTransfers)}</span></div>}>

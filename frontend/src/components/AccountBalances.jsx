@@ -179,7 +179,19 @@ function AccountBalances({ refreshKey }) {
                     </tr>
                 </thead>
                 <tbody>
-                    {accountBalances.map(account => (
+                    {accountBalances.map(account => {
+                        let displayBalance = account.current_balance;
+                        if (account.name === 'KWNR') {
+                            // Spróbuj wyliczyć SC: SG + SN + DS
+                            // Pobieramy z sessionStorage wartości zapamiętane przez KwnrAccountView (jeśli dodać w przyszłości) – fallback obliczenie uproszczone
+                            try {
+                                const kwnrCache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
+                                if (kwnrCache.SC !== undefined) {
+                                    displayBalance = kwnrCache.SC;
+                                }
+                            } catch { /* ignore */ }
+                        }
+                        return (
                         <tr key={account.id}>
                             <td 
                                 className={['Oszczędnościowe', 'Rachunki', 'KWNR'].includes(account.name) ? 'clickable-account' : ''} 
@@ -192,10 +204,10 @@ function AccountBalances({ refreshKey }) {
                                 className="current-balance" 
                                 title={`Stan początkowy: ${formatCurrency(account.initial_balance)}`}
                             >
-                                {formatCurrency(account.current_balance)}
+                                {formatCurrency(displayBalance)}
                             </td>
                         </tr>
-                    ))}
+                    )})}
                 </tbody>
             </table>
 

@@ -4,6 +4,7 @@ const { addTransaction, deleteTransaction, updateTransaction, deleteTransfer } =
 
 router.post('/', addTransaction);
 router.delete('/', deleteTransaction);
+router.post('/delete', deleteTransaction); // Dodatkowa trasa dla metody POST do usuwania
 router.put('/', updateTransaction); // Nowa trasa PUT
 router.delete('/transfer', deleteTransfer); // Trasa do usuwania transferów
 
