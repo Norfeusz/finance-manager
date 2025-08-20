@@ -35,6 +35,16 @@ function AccountBalances({ refreshKey }) {
         };
 
         fetchAccountBalances();
+
+        // Nasłuchuj na event synchronizacji SC z KWNR
+        const handleKwnrScChanged = () => {
+            // Wymuś ponowny render przez zmianę stanu (np. setAccountBalances kopia)
+            setAccountBalances(accs => [...accs]);
+        };
+        window.addEventListener('kwnr-sc-changed', handleKwnrScChanged);
+        return () => {
+            window.removeEventListener('kwnr-sc-changed', handleKwnrScChanged);
+        };
     }, [refreshKey]);
 
     // Funkcja pomocnicza do formatowania waluty
@@ -182,14 +192,16 @@ function AccountBalances({ refreshKey }) {
                     {accountBalances.map(account => {
                         let displayBalance = account.current_balance;
                         if (account.name === 'KWNR') {
-                            // Spróbuj wyliczyć SC: SG + SN + DS
-                            // Pobieramy z sessionStorage wartości zapamiętane przez KwnrAccountView (jeśli dodać w przyszłości) – fallback obliczenie uproszczone
+                            // Pobierz SC z sessionStorage
                             try {
                                 const kwnrCache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
-                                if (kwnrCache.SC !== undefined) {
-                                    displayBalance = kwnrCache.SC;
+                                let sc = kwnrCache.SC;
+                                if (sc === undefined || sc === null || isNaN(Number(sc)) || Number(sc) === 0) {
+                                    displayBalance = 0;
+                                } else {
+                                    displayBalance = sc;
                                 }
-                            } catch { /* ignore */ }
+                            } catch { displayBalance = 0; }
                         }
                         return (
                         <tr key={account.id}>

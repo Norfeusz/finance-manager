@@ -8,8 +8,6 @@ const formatCurrency = (amount) => (amount || 0).toFixed(2).replace('.', ',') + 
 const defaultSubCategories = ['jedzenie', 'słodycze', 'chemia', 'apteka', 'alkohol', 'higiena', 'kwiatki', 'zakupy'];
 const defaultMainCategories = ['auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty'];
 
-// Używamy tej zmiennej w komponencie - musi mieć zdefiniowaną wartość
-const subCategories = defaultSubCategories;
 
 // Funkcja która inicjalizuje mapę nazw kategorii
 const initCategoryDisplayNames = () => {
@@ -20,6 +18,10 @@ const initCategoryDisplayNames = () => {
         'pies': 'Pies', 'prezenty': 'Prezenty', 'zakupy codzienne': 'Zakupy codzienne (suma)'
     };
 };
+
+// Kategorie wykluczone ze statystyk (ale nadal mogą być liczone w sumach globalnych gdzie indziej)
+const EXCLUDED_STATS_CATEGORIES = ['transfer', 'transfer na kwnr'];
+const isExcludedStatsCategory = (cat) => !!cat && EXCLUDED_STATS_CATEGORIES.includes(cat.trim().toLowerCase());
 
 // ZMIANA TUTAJ: Komponent przyjmuje onDataChange
 function ShoppingStats({ refreshKey, transactions, onDataChange }) {
@@ -105,6 +107,7 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
             transactions
                 .filter(t => t.type === 'expense' && t.category !== 'zakupy codzienne')
                 .map(t => t.category)
+                .filter(cat => !isExcludedStatsCategory(cat))
         )];
 
         // Aktualizuj listę kategorii głównych
@@ -247,9 +250,11 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
     if (!stats) { return <div className="card"><h2>Statystyki wydatków</h2><p>Brak danych do wyświetlenia.</p></div>; }
     
     const renderRow = (catKey) => {
-        const currentValue = stats.currentMonth[catKey] || 0;
-        const prevValue = stats.previousMonth[catKey] || 0;
-        const avgValue = stats.historicalAverage[catKey] || 0;
+    if (isExcludedStatsCategory(catKey)) return null; // Ukrywamy w tabeli
+
+    const currentValue = (stats.currentMonth[catKey] || 0);
+    const prevValue = (stats.previousMonth[catKey] || 0);
+    const avgValue = (stats.historicalAverage[catKey] || 0);
         
         // Sprawdź, czy to nowa kategoria (dodana w bieżącym miesiącu)
         const isNewCategory = prevValue === 0 && avgValue === 0 && (currentValue > 0 || mainCategories.includes(catKey) || subCategories.includes(catKey));
@@ -412,7 +417,7 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
                         {renderRow('zakupy codzienne')}
                         {subCategories.map(renderRow)}
                         <tr className="main-category-header"><td colSpan="4">Pozostałe kategorie</td></tr>
-                        {mainCategories.map(renderRow)}
+                        {mainCategories.filter(c => !isExcludedStatsCategory(c)).map(renderRow)}
                     </tbody>
                 </table>
             </div>

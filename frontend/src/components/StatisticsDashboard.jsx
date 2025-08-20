@@ -72,8 +72,11 @@ function StatisticsDashboard({ transactions }) {
 
   // Nowa logika: wpływy początkowe to pierwsze dwa wpływy z datą 1 danego miesiąca
   function getInitialAndExtraIncomes(transactions) {
-    // Najpierw odfiltrujmy wszystkie wpływy generowane z opcji "bilansujemy wydatek"
-    const realIncomes = transactions.filter(t => t.type === 'income' && !isBalanceExpenseIncome(t));
+      // Wyklucz wpływy generowane z opcji bilansowania oraz wpływy na konto KWNR będące efektem transferu na KWNR
+      const realIncomes = transactions.filter(t => {
+        const isKwnrTransferIncome = t.type === 'income' && (t.account === 'KWNR' || t.toAccount === 'KWNR') && t.description && t.description.startsWith('Wpływ z: ');
+        return t.type === 'income' && !isBalanceExpenseIncome(t) && !isKwnrTransferIncome;
+      });
     
     // Zakładamy, że data jest w formacie YYYY-MM-DD
     // Grupujemy po miesiącu
@@ -145,10 +148,20 @@ function StatisticsDashboard({ transactions }) {
   const totalTransfersAmount = filteredTransfers.reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0);
   
   // Proste statystyki
+  const isKwnrTransferIncome = (t) => t.type === 'income' && (t.account === 'KWNR' || t.toAccount === 'KWNR') && t.description && t.description.startsWith('Wpływ z: ');
+
+  const isGenericTransferExpense = (t) => t.type === 'expense' && (
+    (t.description && t.description.trim().toLowerCase() === 'transfer') ||
+    (t.category && t.category.trim().toLowerCase() === 'transfer') ||
+    (t.mainCategory && t.mainCategory.trim().toLowerCase() === 'transfer')
+  );
+
+  // Wykluczamy z sumy tylko ogólną kategorię "Transfer"; "Transfer na KWNR" będzie liczony jako wydatek (ale ukryty w kategoriach)
+
   const stats = {
     // Ogólny bilans, uwzględniający transfery na konto "Rachunki" jako wydatki
     overallBalance: transactions.reduce((acc, t) => {
-      if (t.type === 'income' && !isBalanceExpenseIncome(t)) {
+      if (t.type === 'income' && !isBalanceExpenseIncome(t) && !isKwnrTransferIncome(t)) {
         return acc + Number(t.cost || t.amount || 0);
       } 
       if (t.type === 'expense') {
@@ -174,7 +187,7 @@ function StatisticsDashboard({ transactions }) {
     // Bilans miesiąca - różnica między wpływami a wydatkami w danym miesiącu
     // Uwzględniamy transfery na konto "Rachunki" jako wydatki
     monthlyBalance: transactions.reduce((acc, t) => {
-      if (t.type === 'income' && !isBalanceExpenseIncome(t)) {
+      if (t.type === 'income' && !isBalanceExpenseIncome(t) && !isKwnrTransferIncome(t)) {
         return acc + Number(t.cost || t.amount || 0);
       }
       if (t.type === 'expense') {
@@ -202,18 +215,15 @@ function StatisticsDashboard({ transactions }) {
       return acc;
     }, 0),
     // Suma wpływów z wyłączeniem tych generowanych opcją "bilansujemy wydatek"
-    totalIncome: transactions.filter(t => t.type === 'income' && !isBalanceExpenseIncome(t)).reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0),
+  totalIncome: transactions.filter(t => t.type === 'income' && !isBalanceExpenseIncome(t) && !isKwnrTransferIncome(t)).reduce((acc, t) => acc + Number(t.cost || t.amount || 0), 0),
     // W sumie wydatków uwzględniamy także transfery na konto "Rachunki"
     totalExpenses: transactions.reduce((acc, t) => {
-      // Wykluczamy wydatki KWNR oraz wydatki będące transferem na KWNR
-      if (t.type === 'expense' && 
-          t.category !== 'Transfer na KWNR' &&
-          t.mainCategory !== 'Transfer na KWNR' &&
-          t.description !== 'Transfer na KWNR' &&
-          !t.isKwnrExpense && 
-          t.category !== 'Wydatek KWNR' && 
-          t.mainCategory !== 'Wydatek KWNR' &&
-          !(t.description === 'KWNR' || (t.account && t.account === 'KWNR'))) {
+      if (t.type === 'expense') {
+        // wykluczamy wydatki KWNR
+        if (t.isKwnrExpense || t.category === 'Wydatek KWNR' || t.mainCategory === 'Wydatek KWNR' || t.account === 'KWNR') return acc;
+        if (t.description === 'KWNR') return acc; // bezpieczeństwo
+        // wykluczamy tylko ogólną kategorię "Transfer"; "Transfer na KWNR" liczymy
+        if (isGenericTransferExpense(t)) return acc;
         return acc + Number(t.cost || 0);
       }
       // Transfery na konto "Rachunki" traktujemy jak wydatki
@@ -229,16 +239,20 @@ function StatisticsDashboard({ transactions }) {
     totalTransfers: totalTransfersAmount,
     // Wydatki według kategorii, uwzględniające transfery na konto "Rachunki" ale wykluczające wydatki KWNR
     expenseByCategory: transactions.reduce((acc, t) => {
-      // Standardowe wydatki, ale wykluczamy wydatki KWNR oraz transfery na KWNR
-      if (t.type === 'expense' && 
-          t.category !== 'Transfer na KWNR' &&
-          t.mainCategory !== 'Transfer na KWNR' &&
-          t.description !== 'Transfer na KWNR' &&
-          !t.isKwnrExpense && 
-          t.category !== 'Wydatek KWNR' && 
-          t.mainCategory !== 'Wydatek KWNR' &&
-          !(t.description === 'KWNR' || (t.account && t.account === 'KWNR'))) {
-        let category = t.category || 'Inne';
+      const desc = (t.description || '').trim();
+      const cat = (t.category || '').trim();
+      const mainCat = (t.mainCategory || '').trim();
+      const isGenericTransfer = isGenericTransferExpense(t);
+      if (isGenericTransfer) return acc; // wykluczamy tylko ogólną kategorię "Transfer"; "Transfer na KWNR" ma być widoczny
+
+      // Standardowe wydatki, ale wykluczamy wydatki KWNR
+    if (t.type === 'expense' && 
+      !t.isKwnrExpense && 
+      cat !== 'Wydatek KWNR' && 
+      mainCat !== 'Wydatek KWNR' &&
+  !(desc === 'KWNR' || (t.account && t.account === 'KWNR')) &&
+  !isGenericTransfer) {
+        let category = cat || 'Inne';
         if (!acc[category]) acc[category] = 0;
         acc[category] += Number(t.cost || 0);
       }
@@ -255,6 +269,8 @@ function StatisticsDashboard({ transactions }) {
       return acc;
     }, {})
   };
+
+  // Brak specjalnej listy dla "Transfer na KWNR" – traktowany jak normalna kategoria
 
   // Funkcje do edycji i usuwania wpływów oraz wyliczania salda po operacji
  
@@ -524,7 +540,7 @@ function StatisticsDashboard({ transactions }) {
             <CollapsibleSection title={<div className="section-title"><span>Suma wydatków:</span><span className="section-amount">{formatCurrency(stats.totalExpenses)}</span></div>}>
               <ul className="category-list">
                 {Object.entries(stats.expenseByCategory)
-                  .sort((a, b) => b[1] - a[1]) // Sortowanie malejąco według kwoty
+                  .sort((a, b) => b[1] - a[1])
                   .map(([category, amount]) => (
                     <li key={category} onClick={() => handleCategoryClick(category)} className="category-item">
                       <strong>{category}</strong>

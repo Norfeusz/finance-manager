@@ -76,6 +76,34 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
     const [gabiBalance, setGabiBalance] = useState(0); // SG
     const [norfBalance, setNorfBalance] = useState(0); // SN
     const [availableFunds, setAvailableFunds] = useState(0);
+
+    // SC z sessionStorage (single source of truth)
+    const [scFromStorage, setScFromStorage] = useState(() => {
+        try {
+            const kwnrCache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
+            return typeof kwnrCache.SC === 'number' ? kwnrCache.SC : 0;
+        } catch {
+            return 0;
+        }
+    });
+
+    // Nasłuchuj na event synchronizacji SC z KWNR
+    useEffect(() => {
+        const handleKwnrScChanged = () => {
+            try {
+                const kwnrCache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
+                setScFromStorage(typeof kwnrCache.SC === 'number' ? kwnrCache.SC : 0);
+            } catch {
+                setScFromStorage(0);
+            }
+        };
+        window.addEventListener('kwnr-sc-changed', handleKwnrScChanged);
+        // Odczytaj na starcie
+        handleKwnrScChanged();
+        return () => {
+            window.removeEventListener('kwnr-sc-changed', handleKwnrScChanged);
+        };
+    }, []);
     // Stan formularza rozliczenia
     const [settleTarget, setSettleTarget] = useState(null); // 'Gabi' | 'Norf' | null
     const [settleAmount, setSettleAmount] = useState('');
@@ -552,6 +580,8 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
         try {
             const derived = { SG: gabiS, SN: norfS, DS: ds, SC: gabiS + norfS + ds, timestamp: Date.now() };
             sessionStorage.setItem('kwnrDerived', JSON.stringify(derived));
+            // Emituj event synchronizujący SC
+            window.dispatchEvent(new CustomEvent('kwnr-sc-changed', { detail: { SC: derived.SC, timestamp: derived.timestamp } }));
         } catch { /* ignore */ }
     }, [transactions, currentBalance]);
 
@@ -726,7 +756,7 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                     </div>
                     <div className="balance-card total">
                         <div className="person">Saldo całkowite (SC)</div>
-                        <div className="amount">{formatCurrency(gabiBalance + norfBalance + availableFunds)}</div>
+                        <div className="amount">{formatCurrency(scFromStorage)}</div>
                     </div>
                 </div>
             </div>
