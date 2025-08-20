@@ -1,4 +1,4 @@
-const { getGoogleSheets } = require('../config/googleSheets'); // Zachowujemy na razie, do migracji danych
+// Usunięto nieużywany import Google Sheets
 const { CATEGORY_CONFIG, addNewCategory } = require('../config/categoryConfig');
 const path = require('path');
 const pool = require('../db/pool');
