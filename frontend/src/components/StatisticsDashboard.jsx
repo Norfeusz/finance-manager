@@ -6,7 +6,7 @@ import EditTransactionModal from './EditTransactionModal';
 import AccountBalances from './AccountBalances';
 import './StatisticsDashboard.css';
 
-function StatisticsDashboard({ transactions }) {
+function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
   const [modalInfo, setModalInfo] = useState({ isOpen: false, category: '', transactions: [] });
   const [incomeModal, setIncomeModal] = useState({ isOpen: false, transaction: null });
   const [editIncomeModal, setEditIncomeModal] = useState({ isOpen: false, transaction: null });
@@ -14,7 +14,33 @@ function StatisticsDashboard({ transactions }) {
   const [editTransferModal, setEditTransferModal] = useState({ isOpen: false, transaction: null });
   const [accountBalances, setAccountBalances] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(null);
-  const [monthBudget, setMonthBudget] = useState(0);
+  // SC (saldo całkowite) z KWNR – synchronizowane przez sessionStorage + event z KwnrAccountView
+  const [kwnrSC, setKwnrSC] = useState(() => {
+    try {
+      const cache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
+      const v = Number(cache.SC);
+      return isNaN(v) ? null : v;
+    } catch {
+      return null;
+    }
+  });
+  // Ostatni wydatek (trwały w localStorage)
+  const [lastExpense, setLastExpense] = useState(() => {
+    try {
+      const raw = localStorage.getItem('lastExpense');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+  // Założony budżet = suma wpływów początkowych w wybranym miesiącu (z transakcji)
+  // Filtrujemy incomes z opisem "Wpływ początkowy" (niezależnie od konta)
+  const budgetValue = Array.isArray(transactions)
+    ? transactions
+        .filter(t => t && t.type === 'income' && (
+          (t.description && String(t.description).toLowerCase().startsWith('wpływ początkowy')) ||
+          (t.extra_description && String(t.extra_description).toLowerCase().startsWith('wpływ początkowy'))
+        ))
+        .reduce((sum, t) => sum + Number(t.amount || t.cost || 0), 0)
+    : 0;
 
   // Pobierz stany kont z API oraz dane o bieżącym miesiącu
   useEffect(() => {
@@ -30,19 +56,74 @@ function StatisticsDashboard({ transactions }) {
         
         // Pobierz dane o bieżącym miesiącu
         const monthResponse = await fetch('http://localhost:3001/api/months/current');
-        if (!monthResponse.ok) {
+        if (monthResponse.ok) {
+          const monthData = await monthResponse.json();
+          setCurrentMonth(monthData);
+        } else if (monthResponse.status === 404) {
+          // Brak bieżącego miesiąca – to OK, nie wymuszamy tworzenia
+          setCurrentMonth(null);
+        } else {
           throw new Error(`HTTP error ${monthResponse.status}`);
         }
-        const monthData = await monthResponse.json();
-        setCurrentMonth(monthData);
-        setMonthBudget(parseFloat(monthData.budget) || 0);
+  // budżet wyświetlany pochodzi teraz z transakcji (suma wpływów początkowych)
       } catch (err) {
         console.error('Błąd pobierania danych:', err);
       }
     };
 
     fetchData();
+    // Nasłuchuj zmian SC z panelu KWNR
+  const onKwnrSc = () => {
+      try {
+        const cache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
+        const v = Number(cache.SC);
+        setKwnrSC(isNaN(v) ? null : v);
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('kwnr-sc-changed', onKwnrSc);
+    // Nasłuchuj zmian ostatniego wydatku
+    const onLastExpense = (e) => {
+      try {
+        if (e && e.detail) setLastExpense(e.detail);
+        else {
+          const raw = localStorage.getItem('lastExpense');
+          setLastExpense(raw ? JSON.parse(raw) : null);
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('last-expense-updated', onLastExpense);
+    window.addEventListener('storage', onLastExpense);
+    return () => {
+      window.removeEventListener('kwnr-sc-changed', onKwnrSc);
+      window.removeEventListener('last-expense-updated', onLastExpense);
+      window.removeEventListener('storage', onLastExpense);
+    };
   }, []);
+
+  // Pomocnicza: czy wydatek jest z panelu KWNR (ma nie wpływać na Bilans miesiąca/budżet)
+  const isKwnrExpenseTx = (t) => t.type === 'expense' && (
+    t.isKwnrExpense ||
+    t.category === 'Wydatek KWNR' ||
+    t.mainCategory === 'Wydatek KWNR' ||
+    t.account === 'KWNR' ||
+    t.description === 'KWNR'
+  );
+
+  const totalExpensesForBudget = transactions.reduce((acc,t)=>{
+    if (t.type==='expense') {
+      // WYKLUCZ wydatki z panelu KWNR
+      if (isKwnrExpenseTx(t)) return acc;
+      return acc + Number(t.cost||0);
+    }
+    if (t.type==='transfer' && (t.description && t.description.includes('Transfer do: Rachunki') || t.toAccount==='Rachunki')) return acc + Number(t.cost||t.amount||0);
+    return acc;
+  },0);
+  // Surowy % wykorzystania budżetu (może przekraczać 100)
+  const budgetUsedPctRaw = budgetValue ? (totalExpensesForBudget / budgetValue) * 100 : 0;
+  // % do szerokości paska (maks. 100)
+  const budgetBarPct = Math.min(100, Math.max(0, budgetUsedPctRaw));
+  // Kolor paska wg progów: <75% zielony, 75-100% żółty, >=100% czerwony
+  const budgetBarColor = budgetUsedPctRaw >= 100 ? '#c62828' : (budgetUsedPctRaw >= 75 ? '#f9a825' : '#4caf50');
 
   // Funkcja pomocnicza do formatowania waluty
   function formatCurrency(value) {
@@ -182,8 +263,14 @@ function StatisticsDashboard({ transactions }) {
       if (t.type === 'expense') acc[accName] -= Number(t.cost || 0);
       return acc;
     }, { 'Wspólne': 0, 'Gotówka': 0, 'Oszczędnościowe': 0, 'Rachunki': 0 }),
-    // Obliczanie sumy wszystkich kont - na podstawie danych z tabeli account_balances
-    totalAccountsBalance: accountBalances.reduce((sum, account) => sum + parseFloat(account.current_balance || 0), 0),
+    // Obliczanie sumy wszystkich kont – KWNR pokazujemy jako SC (SG+SN+DS)
+    totalAccountsBalance: accountBalances.reduce((sum, account) => {
+      const isKwnr = account.name === 'KWNR';
+      const val = isKwnr && kwnrSC !== null && isFinite(kwnrSC)
+        ? Number(kwnrSC)
+        : parseFloat(account.current_balance || 0);
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0),
     // Bilans miesiąca - różnica między wpływami a wydatkami w danym miesiącu
     // Uwzględniamy transfery na konto "Rachunki" jako wydatki
     monthlyBalance: transactions.reduce((acc, t) => {
@@ -191,6 +278,8 @@ function StatisticsDashboard({ transactions }) {
         return acc + Number(t.cost || t.amount || 0);
       }
       if (t.type === 'expense') {
+        // WYKLUCZ wydatki z panelu KWNR
+        if (isKwnrExpenseTx(t)) return acc;
         return acc - Number(t.cost || 0);
       }
       // Transfery na konto "Rachunki" traktujemy jak wydatki
@@ -201,9 +290,11 @@ function StatisticsDashboard({ transactions }) {
       }
       return acc;
     }, 0),
-    // Założony bilans miesiąca - różnica między budżetem a wydatkami (uwzględniając transfery na Rachunki)
-    monthlyBudgetBalance: monthBudget - transactions.reduce((acc, t) => {
+    // Założony bilans miesiąca - różnica między budżetem (suma wpływów początkowych) a wydatkami (uwzględniając transfery na Rachunki)
+  monthlyBudgetBalance: budgetValue - transactions.reduce((acc, t) => {
       if (t.type === 'expense') {
+        // WYKLUCZ wydatki z panelu KWNR
+        if (isKwnrExpenseTx(t)) return acc;
         return acc + Number(t.cost || 0);
       }
       // Transfery na konto "Rachunki" traktujemy jak wydatki
@@ -281,7 +372,17 @@ function StatisticsDashboard({ transactions }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ original: editIncomeModal.transaction, updated: updatedData })
         });
-        const result = await response.json();
+        let result;
+        try { result = await response.json(); } catch { result = {}; }
+        if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+          const confirmReopen = window.confirm(result.message || `Miesiąc ${result.month_id} jest zamknięty. Otworzyć aby zaktualizować wpływ?`);
+          if (confirmReopen) {
+            const reopenResp = await fetch(`http://localhost:3001/api/months/${result.month_id}/reopen`, { method: 'POST' });
+            if (reopenResp.ok) return await handleSaveEditIncome(updatedData);
+            alert('Nie udało się otworzyć miesiąca');
+          }
+          return;
+        }
         if (response.ok) {
           alert('Wpływ zaktualizowany!');
           setEditIncomeModal({ isOpen: false, transaction: null });
@@ -306,7 +407,16 @@ function StatisticsDashboard({ transactions }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: transaction.date, id: transaction.id, rowId: transaction.rowId }),
       });
-      const result = await response.json();
+      let result; try { result = await response.json(); } catch { result = {}; }
+      if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+        const confirmReopen = window.confirm(result.message || `Miesiąc ${result.month_id} jest zamknięty. Otworzyć aby usunąć wpływ?`);
+        if (confirmReopen) {
+          const reopenResp = await fetch(`http://localhost:3001/api/months/${result.month_id}/reopen`, { method: 'POST' });
+          if (reopenResp.ok) return await handleDeleteIncome(transaction);
+          alert('Nie udało się otworzyć miesiąca');
+        }
+        return;
+      }
       if (response.ok) {
         alert('Wpływ usunięty.');
         window.location.reload(); // lub odśwież dane w inny sposób
@@ -397,7 +507,16 @@ function StatisticsDashboard({ transactions }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ original: editTransferModal.transaction, updated: updatedData })
       });
-      const result = await response.json();
+      let result; try { result = await response.json(); } catch { result = {}; }
+      if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+        const confirmReopen = window.confirm(result.message || `Miesiąc ${result.month_id} jest zamknięty. Otworzyć aby zaktualizować transfer?`);
+        if (confirmReopen) {
+          const reopenResp = await fetch(`http://localhost:3001/api/months/${result.month_id}/reopen`, { method: 'POST' });
+          if (reopenResp.ok) return await handleSaveEditTransfer(updatedData);
+          alert('Nie udało się otworzyć miesiąca');
+        }
+        return;
+      }
       if (response.ok) {
         alert('Transfer zaktualizowany!');
         setEditTransferModal({ isOpen: false, transaction: null });
@@ -427,8 +546,16 @@ function StatisticsDashboard({ transactions }) {
           amount: transfer.cost || transfer.amount 
         }),
       });
-      
-      const result = await response.json();
+      let result; try { result = await response.json(); } catch { result = {}; }
+      if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+        const confirmReopen = window.confirm(result.message || `Miesiąc ${result.month_id} jest zamknięty. Otworzyć aby cofnąć transfer?`);
+        if (confirmReopen) {
+          const reopenResp = await fetch(`http://localhost:3001/api/months/${result.month_id}/reopen`, { method: 'POST' });
+          if (reopenResp.ok) return await handleUndoTransfer(transfer);
+          alert('Nie udało się otworzyć miesiąca');
+        }
+        return;
+      }
       if (response.ok) {
         alert('Transfer został cofnięty.');
         window.location.reload(); // lub odśwież dane w inny sposób
@@ -440,23 +567,55 @@ function StatisticsDashboard({ transactions }) {
     }
   };
 
+  // Usunięto pasek i funkcję formatowania nazwy miesiąca
+
   return (
     <>
       <div className="dashboard">
+        {/* Pasek nawigacji miesiącami i przycisk dodania miesiąca zostały usunięte na życzenie użytkownika */}
+
         <div className="stats-grid">
           <div className="card">
             <h2>Główne Statystyki</h2>
-            <AccountBalances refreshKey={transactions.length} />
+            <AccountBalances refreshKey={transactions.length} selectedMonthId={selectedMonthId} />
             <div className="highlighted-stat">
               <span className="label">Suma kont:</span>
               <span className={`value ${stats.totalAccountsBalance >= 0 ? 'positive' : 'negative'}`}>
                 {formatCurrency(stats.totalAccountsBalance)}
               </span>
             </div>
+            <div className="highlighted-stat" style={{ marginTop: 6 }}>
+              <span className="label">Ostatni wydatek:</span>
+              {lastExpense ? (
+                <span className="value">
+                  {lastExpense.category || '-'}
+                  {typeof lastExpense.amount !== 'undefined' ? ' — ' + formatCurrency(Number(lastExpense.amount)) : ''}
+                  {lastExpense.date ? ' — ' + formatDate(lastExpense.date) : ''}
+                </span>
+              ) : (
+                <span className="value" style={{ color: '#888' }}>brak</span>
+              )}
+            </div>
           </div>
 
           <div className="card">
             <h2>Aktualny miesiąc</h2>
+            <div style={{margin:'4px 0 12px 0'}}>
+              <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.8rem'}}>
+                <span>Wykorzystanie budżetu</span>
+                <span>
+                  {budgetValue > 0
+                    ? (
+                      `${totalExpensesForBudget.toFixed(2)} / ${budgetValue.toFixed(2)} PLN (${budgetUsedPctRaw.toFixed(1)}%)` +
+                      (budgetUsedPctRaw > 100 ? `, +${(budgetUsedPctRaw - 100).toFixed(1)}% ponad` : '')
+                    )
+                    : 'Brak budżetu'}
+                </span>
+              </div>
+              <div style={{height:8, background:'#eee', borderRadius:4, overflow:'hidden', marginTop:4}}>
+                <div style={{width:`${budgetBarPct}%`, height:'100%', background: budgetBarColor, transition:'width .3s'}} />
+              </div>
+            </div>
             <div className="highlighted-stat">
               <div className="section-title">
                 <span className="label">Bilans miesiąca:</span>
@@ -479,7 +638,7 @@ function StatisticsDashboard({ transactions }) {
                   if (newBudget !== null) {
                     const budget = parseFloat(newBudget.replace(',', '.'));
                     if (!isNaN(budget) && budget >= 0) {
-                      setMonthBudget(budget);
+                      // usunięto edycję budżetu – interfejs uproszczony
                       // Zapisz budżet w bazie danych
                       fetch(`http://localhost:3001/api/months/${currentMonth.id}`, {
                         method: 'PATCH',
@@ -576,6 +735,7 @@ function StatisticsDashboard({ transactions }) {
             </CollapsibleSection>
           </div>
         </div>
+          {/* ...przyciski przeniesione wyżej */}
       </div>
 
 

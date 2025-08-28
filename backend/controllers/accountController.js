@@ -312,10 +312,133 @@ const updateAccountCurrentBalance = async (req, res) => {
     }
 };
 
+// Rachunki: per-miesięczny stan i operacje
+const getBillsAccountId = async (client) => {
+    const r = await client.query("SELECT id FROM accounts WHERE name = 'Rachunki'");
+    if (!r.rows.length) throw new Error('Konto Rachunki nie istnieje');
+    return r.rows[0].id;
+};
+
+const getBillsMonthState = async (req, res) => {
+    const { monthId } = req.params; // 'YYYY-MM'
+    if (!/^\d{4}-\d{2}$/.test(monthId)) return res.status(400).json({ message: 'Nieprawidłowy format monthId' });
+    const client = await pool.connect();
+        try {
+            const accountId = await getBillsAccountId(client);
+            // Auto-seed jednorazowego salda dla 2025-08 jeśli brak wpisu
+            if (monthId === '2025-08') {
+                const check = await client.query(
+                    'SELECT 1 FROM account_month_openings WHERE account_id = $1 AND month_id = $2',
+                    [accountId, monthId]
+                );
+                if (!check.rows.length) {
+                    await client.query(
+                        `INSERT INTO account_month_openings (account_id, month_id, opening_balance)
+                         VALUES ($1, $2, $3)
+                         ON CONFLICT (account_id, month_id) DO NOTHING`,
+                        [accountId, monthId, 1208.06]
+                    );
+                }
+            }
+            const openRes = await client.query(
+                'SELECT opening_balance FROM account_month_openings WHERE account_id = $1 AND month_id = $2',
+                [accountId, monthId]
+            );
+            const opening = openRes.rows[0]?.opening_balance || 0;
+        const dedRes = await client.query(
+            'SELECT id, amount, deducted_on FROM bills_deductions WHERE account_id = $1 AND month_id = $2 ORDER BY deducted_on ASC, id ASC',
+            [accountId, monthId]
+        );
+        const totalDeducted = dedRes.rows.reduce((s, r) => s + Number(r.amount), 0);
+        res.json({ monthId, openingBalance: Number(opening), totalDeducted, deductions: dedRes.rows });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: 'Błąd pobierania stanu Rachunki', error: e.message });
+    } finally {
+        client.release();
+    }
+};
+
+const setBillsOpeningBalance = async (req, res) => {
+    const { monthId } = req.params;
+    const { openingBalance } = req.body;
+    if (!/^\d{4}-\d{2}$/.test(monthId)) return res.status(400).json({ message: 'Nieprawidłowy format monthId' });
+    if (openingBalance === undefined || openingBalance === null) return res.status(400).json({ message: 'Brak openingBalance' });
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const accountId = await getBillsAccountId(client);
+        await client.query(
+            `INSERT INTO account_month_openings (account_id, month_id, opening_balance)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (account_id, month_id) DO UPDATE SET opening_balance = EXCLUDED.opening_balance`,
+            [accountId, monthId, openingBalance]
+        );
+        await client.query('COMMIT');
+        res.json({ message: 'Zapisano saldo początkowe Rachunki dla miesiąca', monthId, openingBalance });
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error(e);
+        res.status(500).json({ message: 'Błąd zapisu salda początkowego', error: e.message });
+    } finally {
+        client.release();
+    }
+};
+
+const listBillsDeductions = async (req, res) => {
+    const { monthId } = req.params;
+    if (!/^\d{4}-\d{2}$/.test(monthId)) return res.status(400).json({ message: 'Nieprawidłowy format monthId' });
+    const client = await pool.connect();
+    try {
+        const accountId = await getBillsAccountId(client);
+        const r = await client.query(
+            'SELECT id, amount, deducted_on FROM bills_deductions WHERE account_id = $1 AND month_id = $2 ORDER BY deducted_on ASC, id ASC',
+            [accountId, monthId]
+        );
+        res.json({ monthId, deductions: r.rows });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: 'Błąd pobierania odjęć', error: e.message });
+    } finally {
+        client.release();
+    }
+};
+
+const applyBillsDeduction = async (req, res) => {
+    const { monthId } = req.params;
+    const { amount, date } = req.body || {};
+    if (!/^\d{4}-\d{2}$/.test(monthId)) return res.status(400).json({ message: 'Nieprawidłowy format monthId' });
+    const value = Number(amount);
+    if (!isFinite(value) || value < 0) return res.status(400).json({ message: 'Nieprawidłowa kwota odjęcia' });
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const accountId = await getBillsAccountId(client);
+        const usedDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+        const ins = await client.query(
+            `INSERT INTO bills_deductions (account_id, month_id, amount, deducted_on)
+             VALUES ($1, $2, $3, COALESCE($4::date, CURRENT_DATE)) RETURNING id, deducted_on`,
+            [accountId, monthId, value, usedDate]
+        );
+        await client.query('COMMIT');
+        res.status(201).json({ id: ins.rows[0].id, monthId, amount: value, deducted_on: ins.rows[0].deducted_on });
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error(e);
+        res.status(500).json({ message: 'Błąd zapisu odjęcia', error: e.message });
+    } finally {
+        client.release();
+    }
+};
+
 module.exports = { 
-    getAccountBalances,
-    updateAccountInitialBalance,
-    recalculateAllAccountBalances,
-    checkAccountBalance,
-    updateAccountCurrentBalance
+        getAccountBalances,
+        updateAccountInitialBalance,
+        recalculateAllAccountBalances,
+        checkAccountBalance,
+        updateAccountCurrentBalance,
+        getBillsMonthState,
+        setBillsOpeningBalance,
+        listBillsDeductions,
+        applyBillsDeduction
 };

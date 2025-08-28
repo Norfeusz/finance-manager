@@ -41,8 +41,17 @@ function CategoryDetailsModal({ isOpen, onClose, categoryName, transactions, onD
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ original: editingTransaction, updated: updatedData })
         });
-        const result = await response.json();
-        if (response.ok) {
+    let result; try { result = await response.json(); } catch { result = {}; }
+    if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+      const confirmReopen = window.confirm(result.message || `Miesiąc ${result.month_id} jest zamknięty. Otworzyć aby zaktualizować transakcję?`);
+      if (confirmReopen) {
+        const reopenResp = await fetch(`http://localhost:3001/api/months/${result.month_id}/reopen`, { method: 'POST' });
+        if (reopenResp.ok) return await handleSaveEdit(updatedData);
+        alert('Nie udało się otworzyć miesiąca');
+      }
+      return;
+    }
+    if (response.ok) {
             alert('Transakcja zaktualizowana!');
             handleCloseEditModal();
             onClose(); // Zamknij główny modal
@@ -72,7 +81,16 @@ function CategoryDetailsModal({ isOpen, onClose, categoryName, transactions, onD
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: transaction.id || transaction.rowId }), // Dodajemy fallback do rowId
         });
-        const result = await response.json();
+        let result; try { result = await response.json(); } catch { result = {}; }
+        if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+          const confirmReopen = window.confirm(result.message || `Miesiąc ${result.month_id} jest zamknięty. Otworzyć aby usunąć transakcję?`);
+          if (confirmReopen) {
+            const reopenResp = await fetch(`http://localhost:3001/api/months/${result.month_id}/reopen`, { method: 'POST' });
+            if (reopenResp.ok) return await handleDelete(transaction);
+            alert('Nie udało się otworzyć miesiąca');
+          }
+          return;
+        }
         if (response.ok) {
           alert('Transakcja usunięta pomyślnie.');
           onClose();

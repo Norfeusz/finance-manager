@@ -99,21 +99,29 @@ const addTransaction = async (req, res) => {
         const monthYear = transactionDate.getFullYear();
         const monthNum = transactionDate.getMonth() + 1;
         
-        let monthRes = await client.query(
-          'SELECT id FROM months WHERE year = $1 AND month = $2',
-          [monthYear, monthNum]
-        );
-        
-        let monthId;
-        if (monthRes.rows.length === 0) {
-          const newMonthRes = await client.query(
-            'INSERT INTO months (year, month, label) VALUES ($1, $2, $3) RETURNING id',
-            [monthYear, monthNum, monthLabel]
-          );
-          monthId = newMonthRes.rows[0].id;
-        } else {
-          monthId = monthRes.rows[0].id;
+        // Zapewnienie istnienia miesiąca z logiką zamknięcia (bez automatycznego tworzenia jeśli brak zgody)
+        const monthKey = `${monthYear.toString().padStart(4,'0')}-${monthNum.toString().padStart(2,'0')}`;
+        let monthLookup = await client.query('SELECT * FROM months WHERE id = $1', [monthKey]);
+        if (!monthLookup.rows.length) {
+          // Brak miesiąca – informacja dla klienta (rollback bieżącej transakcji wsadowej)
+          await client.query('ROLLBACK');
+            return res.status(202).json({
+              needsConfirmation: true,
+              action: 'create_month',
+              month_id: monthKey,
+              message: `Miesiąc ${monthKey} nie istnieje. Czy utworzyć?`
+            });
         }
+        if (monthLookup.rows[0].is_closed) {
+          await client.query('ROLLBACK');
+          return res.status(202).json({
+            needsConfirmation: true,
+            action: 'reopen_month',
+            month_id: monthKey,
+            message: `Miesiąc ${monthKey} jest zamknięty. Czy otworzyć i dodać transakcję?`
+          });
+        }
+        const monthId = monthLookup.rows[0].id;
         
         switch (flowType) {
           case 'expense': {
@@ -507,7 +515,9 @@ const addTransaction = async (req, res) => {
               }
               
               const expenseAmount = parseFloat(data.cost);
-              const wpływOpis = `Zwrot od: ${data.account} - ${description || 'wydatek'}`;
+              // Upraszczamy opis automatycznego wpływu do samej nazwy konta (Gabi/Norf)
+              // Poprzednio: "Zwrot od: {konto} - {opis}" – utrudniało to klasyfikację dodatkowych wpływów
+              const wpływOpis = `${data.account}`;
               
               // Zapisz transakcję wpływu z informacją o wybranej opcji bilansowania
               const extraDesc = `Automatycznie wygenerowane z wydatku z konta ${data.account} (opcja: ${balanceOption})`;
@@ -542,17 +552,26 @@ const addTransaction = async (req, res) => {
           }
           
           case 'income': {
-            // Znajdź lub utwórz konto
+            // Przekierowanie wpływów początkowych (Gabi/Norf) na konto Wspólne
+            const isInitialIncome = (data.from === 'Wpływ początkowy');
+            let targetAccountName = data.toAccount;
+            let extraDescToUse = extraDescription || null;
+            if (isInitialIncome && (data.toAccount === 'Gabi' || data.toAccount === 'Norf')) {
+              targetAccountName = 'Wspólne';
+              if (!extraDescToUse) extraDescToUse = `Wpływ początkowy od: ${data.toAccount}`;
+            }
+
+            // Znajdź lub utwórz konto docelowe
             let accountRes = await client.query(
               'SELECT id FROM accounts WHERE name = $1',
-              [data.toAccount]
+              [targetAccountName]
             );
             
             let accountId;
             if (accountRes.rows.length === 0) {
               const newAccountRes = await client.query(
                 'INSERT INTO accounts (name) VALUES ($1) RETURNING id',
-                [data.toAccount]
+                [targetAccountName]
               );
               accountId = newAccountRes.rows[0].id;
             } else {
@@ -565,7 +584,7 @@ const addTransaction = async (req, res) => {
               `INSERT INTO transactions 
                (month_id, account_id, type, amount, description, extra_description, date)
                VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-              [monthId, accountId, 'income', incomeAmount, data.from || description, extraDescription || null, date]
+              [monthId, accountId, 'income', incomeAmount, data.from || description, extraDescToUse, date]
             );
             
             // Sprawdź czy istnieje wpis w account_balances dla tego konta
@@ -799,13 +818,13 @@ const deleteTransaction = async (req, res) => {
             console.log(`Rozpoczęto transakcję SQL`);
             
             // Najpierw pobierz informacje o transakcji wraz z nazwą konta i datą
-            const transactionResult = await client.query(
-                `SELECT t.id, t.type, t.amount, t.account_id, t.description, t.date, a.name as account_name 
-                 FROM transactions t
-                 JOIN accounts a ON t.account_id = a.id
-                 WHERE t.id = $1`,
-                [id]
-            );
+      const transactionResult = await client.query(
+        `SELECT t.id, t.type, t.amount, t.account_id, t.description, t.date, t.month_id, a.name as account_name 
+         FROM transactions t
+         JOIN accounts a ON t.account_id = a.id
+         WHERE t.id = $1`,
+        [id]
+      );
             
             console.log(`Wynik zapytania o transakcję: ${transactionResult.rows.length} wierszy`);
             
@@ -815,7 +834,15 @@ const deleteTransaction = async (req, res) => {
                 return res.status(404).json({ message: 'Nie znaleziono transakcji o podanym ID.' });
             }
             
-            const transaction = transactionResult.rows[0];
+      const transaction = transactionResult.rows[0];
+      // Sprawdzenie czy miesiąc jest zamknięty
+      if (transaction.month_id) {
+        const monthCheck = await client.query('SELECT id, is_closed FROM months WHERE id = $1', [transaction.month_id]);
+        if (monthCheck.rows.length && monthCheck.rows[0].is_closed) {
+          await client.query('ROLLBACK');
+          return res.status(202).json({ needsConfirmation: true, action: 'reopen_month', month_id: transaction.month_id, message: `Miesiąc ${transaction.month_id} jest zamknięty. Czy otworzyć aby usunąć transakcję?` });
+        }
+      }
             const amount = parseFloat(transaction.amount);
             const accountId = transaction.account_id;
             const accountName = transaction.account_name;
@@ -830,17 +857,17 @@ const deleteTransaction = async (req, res) => {
                     // Dodajemy bardziej dokładne wyszukiwanie i lepsze logowanie dla debugowania
                     console.log(`Szukam automatycznego wpływu związanego z wydatkiem z konta ${accountName} z dnia ${transaction.date}`);
                     
-                    const autoIncomeResult = await client.query(`
-                        SELECT t.id, t.amount, t.account_id, t.description, a.name as target_account_name
-                        FROM transactions t
-                        JOIN accounts a ON t.account_id = a.id
-                        WHERE t.type = 'income' 
-                        AND t.description LIKE $1
-                        AND t.extra_description LIKE $2
-                        AND DATE(t.date) = DATE($3)
-                        ORDER BY t.id DESC
-                        LIMIT 1
-                    `, [`Zwrot od: ${accountName}%`, `%Automatycznie wygenerowane%${accountName}%`, transaction.date]);
+          const autoIncomeResult = await client.query(`
+            SELECT t.id, t.amount, t.account_id, t.description, a.name as target_account_name
+            FROM transactions t
+            JOIN accounts a ON t.account_id = a.id
+            WHERE t.type = 'income' 
+            AND t.description = $1
+            AND t.extra_description LIKE $2
+            AND DATE(t.date) = DATE($3)
+            ORDER BY t.id DESC
+            LIMIT 1
+          `, [accountName, `%Automatycznie wygenerowane%${accountName}%`, transaction.date]);
                     
                     console.log(`Znaleziono ${autoIncomeResult.rows.length} pasujących automatycznych wpływów`);
                     
@@ -1083,20 +1110,28 @@ const updateTransaction = async (req, res) => {
             await client.query('BEGIN');
             
             // Pobierz aktualną transakcję z bazy wraz z nazwą konta
-            const transactionResult = await client.query(
-                `SELECT t.id, t.type, t.amount, t.account_id, t.description, t.date, a.name as account_name 
-                 FROM transactions t
-                 JOIN accounts a ON t.account_id = a.id
-                 WHERE t.id = $1`,
-                [original.id]
-            );
+      const transactionResult = await client.query(
+        `SELECT t.id, t.type, t.amount, t.account_id, t.description, t.date, t.month_id, a.name as account_name 
+         FROM transactions t
+         JOIN accounts a ON t.account_id = a.id
+         WHERE t.id = $1`,
+        [original.id]
+      );
             
             if (transactionResult.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ message: 'Nie znaleziono transakcji o podanym ID.' });
             }
             
-            const transaction = transactionResult.rows[0];
+      const transaction = transactionResult.rows[0];
+      // Blokada aktualizacji w zamkniętym miesiącu
+      if (transaction.month_id) {
+        const monthCheck = await client.query('SELECT id, is_closed FROM months WHERE id = $1', [transaction.month_id]);
+        if (monthCheck.rows.length && monthCheck.rows[0].is_closed) {
+          await client.query('ROLLBACK');
+          return res.status(202).json({ needsConfirmation: true, action: 'reopen_month', month_id: transaction.month_id, message: `Miesiąc ${transaction.month_id} jest zamknięty. Czy otworzyć aby zaktualizować transakcję?` });
+        }
+      }
             const originalAmount = parseFloat(transaction.amount);
             const originalAccountId = transaction.account_id;
             const originalAccountName = transaction.account_name;
@@ -1157,14 +1192,14 @@ const updateTransaction = async (req, res) => {
                 // 1. Jeśli oryginalne konto było Gabi/Norf - znajdź i usuń automatyczny wpływ
                 if (originalAccountName === 'Gabi' || originalAccountName === 'Norf') {
                     // Znajdź powiązany automatyczny wpływ
-                    const autoIncomeResult = await client.query(`
-                        SELECT t.id, t.amount, t.account_id
-                        FROM transactions t
-                        WHERE t.type = 'income' 
-                        AND t.description LIKE $1
-                        AND t.extra_description LIKE $2
-                        AND DATE(t.date) = DATE($3)
-                    `, [`Zwrot od: ${originalAccountName}%`, `%Automatycznie wygenerowane%${originalAccountName}%`, transaction.date]);
+          const autoIncomeResult = await client.query(`
+            SELECT t.id, t.amount, t.account_id
+            FROM transactions t
+            WHERE t.type = 'income' 
+            AND t.description = $1
+            AND t.extra_description LIKE $2
+            AND DATE(t.date) = DATE($3)
+          `, [originalAccountName, `%Automatycznie wygenerowane%${originalAccountName}%`, transaction.date]);
                     
                     if (autoIncomeResult.rows.length > 0) {
                         const autoIncome = autoIncomeResult.rows[0];
@@ -1200,7 +1235,8 @@ const updateTransaction = async (req, res) => {
                     }
                     
                     const expenseAmount = updatedAmount;
-                    const wpływOpis = `Zwrot od: ${updatedAccountName} - ${updated.description || original.description || 'wydatek'}`;
+                    // Nowy uproszczony opis automatycznego wpływu
+                    const wpływOpis = `${updatedAccountName}`;
                     
                     // Zapisz nową transakcję wpływu
                     await client.query(
@@ -1438,17 +1474,21 @@ const deleteTransfer = async (req, res) => {
         const monthYear = transactionDate.getFullYear();
         const monthNum = transactionDate.getMonth() + 1;
         
-        let monthRes = await client.query(
-            'SELECT id FROM months WHERE year = $1 AND month = $2',
-            [monthYear, monthNum]
-        );
+    let monthRes = await client.query(
+      'SELECT id, is_closed FROM months WHERE year = $1 AND month = $2',
+      [monthYear, monthNum]
+    );
         
         if (monthRes.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ message: 'Nie znaleziono miesiąca dla podanej daty.' });
         }
         
-        const monthId = monthRes.rows[0].id;
+    const monthId = monthRes.rows[0].id;
+    if (monthRes.rows[0].is_closed) {
+      await client.query('ROLLBACK');
+      return res.status(202).json({ needsConfirmation: true, action: 'reopen_month', month_id: monthId, message: `Miesiąc ${monthId} jest zamknięty. Czy otworzyć aby usunąć transfer?` });
+    }
         
         // Usuń rekord transferu wychodzącego
         await client.query(`

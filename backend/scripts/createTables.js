@@ -15,7 +15,14 @@ async function createTables() {
     const tablesExist = await checkIfTablesExist(client);
     if (tablesExist) {
       console.log('Tabele już istnieją w bazie danych.');
-      // Sprawdź czy tabela account_balances istnieje
+      // Upewnij się, że kolumna is_closed istnieje w months
+      try {
+        await client.query(`ALTER TABLE months ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT FALSE`);
+  await client.query(`ALTER TABLE months ADD COLUMN IF NOT EXISTS budget NUMERIC(12,2)`);
+      } catch (e) {
+        console.error('Nie udało się dodać kolumny is_closed:', e.message);
+      }
+  // Sprawdź czy tabela account_balances istnieje
       const balancesExist = await checkIfAccountBalancesExist(client);
       if (!balancesExist) {
         // Jeśli tabele główne istnieją, ale nie ma tabeli account_balances, dodaj ją ręcznie
@@ -130,6 +137,51 @@ async function createTables() {
         } catch (error) {
           console.error('Błąd podczas dodawania początkowych sald kont:', error);
         }
+      }
+
+      // Utwórz pomocnicze tabele dla logiki "Rachunki" per miesiąc
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS account_month_openings (
+            id SERIAL PRIMARY KEY,
+            account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+            month_id VARCHAR(7) NOT NULL,
+            opening_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+            UNIQUE(account_id, month_id)
+          )
+        `);
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS bills_deductions (
+            id SERIAL PRIMARY KEY,
+            account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+            month_id VARCHAR(7) NOT NULL,
+            amount NUMERIC(12,2) NOT NULL CHECK(amount >= 0),
+            deducted_on DATE NOT NULL DEFAULT CURRENT_DATE
+          )
+        `);
+        // Tabele definicji rachunków: stałe (recurring) i jednorazowe per miesiąc
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS recurring_bills (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(128) NOT NULL,
+            recipient VARCHAR(128),
+            amount NUMERIC(12,2) NOT NULL CHECK(amount >= 0),
+            start_month_id VARCHAR(7) NOT NULL,
+            end_month_id VARCHAR(7),
+            is_active BOOLEAN DEFAULT TRUE
+          )
+        `);
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS monthly_bills (
+            id SERIAL PRIMARY KEY,
+            month_id VARCHAR(7) NOT NULL,
+            name VARCHAR(128) NOT NULL,
+            recipient VARCHAR(128),
+            amount NUMERIC(12,2) NOT NULL CHECK(amount >= 0)
+          )
+        `);
+      } catch (e) {
+        console.error('Nie udało się utworzyć tabel pomocniczych dla Rachunki:', e.message);
       }
       return;
     }

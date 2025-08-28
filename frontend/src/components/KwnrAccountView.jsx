@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './KwnrAccountView.css';
 
+// Widok KWNR jest niezależny od aktywnego miesiąca – zawsze pokazuje pełną historię i bieżące saldo z bazy
 function KwnrAccountView({ transactions: initialTransactions, currentBalance: initialBalance }) {
     // Stan dla formularza dodawania wydatku
     const [newExpense, setNewExpense] = useState({
@@ -25,38 +26,73 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
     
     // Funkcja pobierająca dane o transakcjach KWNR
     const fetchKwnrData = async () => {
+        const tryFetch = async (url) => {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        };
         try {
             setIsLoading(true);
-            const response = await fetch('http://localhost:3001/api/accounts/KWNR/transactions');
-            if (response.ok) {
-                const data = await response.json();
-                console.log("Otrzymane dane z API:", JSON.stringify(data, null, 2));
-                if (data.transactions) {
-                    data.transactions.slice(0,20).forEach(t => console.log('[KWNR RAW DATE]', t.id, t.date));
-                }
-                setTransactions(data.transactions || []);
-                setCurrentBalance(data.balance || 0);
-            } else {
-                console.error('Błąd pobierania danych KWNR:', await response.text());
+            // Preferowany endpoint transakcji konta
+            let data;
+            try {
+                data = await tryFetch('http://localhost:3001/api/transactions/account/KWNR');
+            } catch (e1) {
+                console.warn('Primary KWNR endpoint failed, trying fallback:', e1.message);
+                data = await tryFetch('http://localhost:3001/api/accounts/KWNR/transactions');
             }
+            console.log("Otrzymane dane z API:", JSON.stringify(data, null, 2));
+            if (data.transactions) {
+                data.transactions.slice(0,20).forEach(t => console.log('[KWNR RAW DATE]', t.id, t.date));
+            }
+            setTransactions(data.transactions || []);
+            setCurrentBalance(data.balance || 0);
         } catch (error) {
             console.error('Błąd podczas pobierania danych KWNR:', error);
-        } finally {
-            setIsLoading(false);
+        } finally { setIsLoading(false); }
+    };
+
+    // Pomocnicza obsługa: zapewnij istnienie/otwarcie miesiąca i ponów operację
+    const ensureMonthAndRetry = async (info, originalAction) => {
+        try {
+            if (!info || !info.needsConfirmation) return false;
+            if (info.action === 'create_month' && info.month_id) {
+                const proceed = window.confirm(info.message || `Miesiąc ${info.month_id} nie istnieje. Utworzyć?`);
+                if (!proceed) return false;
+                const resp = await fetch('http://localhost:3001/api/months/ensure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ month_id: info.month_id, allowCreate: true })
+                });
+                if (!resp.ok) { alert('Nie udało się utworzyć miesiąca.'); return false; }
+                await originalAction();
+                return true;
+            }
+            if (info.action === 'reopen_month' && info.month_id) {
+                const proceed = window.confirm(info.message || `Miesiąc ${info.month_id} jest zamknięty. Otworzyć?`);
+                if (!proceed) return false;
+                const resp = await fetch(`http://localhost:3001/api/months/${info.month_id}/reopen`, { method: 'POST' });
+                if (!resp.ok) { alert('Nie udało się otworzyć miesiąca.'); return false; }
+                await originalAction();
+                return true;
+            }
+        } catch (e) {
+            console.error('ensureMonthAndRetry error', e);
         }
+        return false;
     };
     
-    // Pobierz dane przy pierwszym renderowaniu
+    // Pobierz pełną historię i saldo przy pierwszym renderowaniu (niezależnie od miesiąca)
     useEffect(() => {
         fetchKwnrData();
     }, []);
     
-    // Aktualizuj dane przy zmianie props
+    // Jeśli nadrzędny komponent przekaże propsy, możesz je wyświetlić, ale nie są wymagane
     useEffect(() => {
-        if (initialTransactions) {
+        if (Array.isArray(initialTransactions) && initialTransactions.length) {
             setTransactions(initialTransactions);
         }
-        if (initialBalance !== undefined) {
+        if (typeof initialBalance === 'number') {
             setCurrentBalance(initialBalance);
         }
     }, [initialTransactions, initialBalance]);
@@ -77,33 +113,7 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
     const [norfBalance, setNorfBalance] = useState(0); // SN
     const [availableFunds, setAvailableFunds] = useState(0);
 
-    // SC z sessionStorage (single source of truth)
-    const [scFromStorage, setScFromStorage] = useState(() => {
-        try {
-            const kwnrCache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
-            return typeof kwnrCache.SC === 'number' ? kwnrCache.SC : 0;
-        } catch {
-            return 0;
-        }
-    });
-
-    // Nasłuchuj na event synchronizacji SC z KWNR
-    useEffect(() => {
-        const handleKwnrScChanged = () => {
-            try {
-                const kwnrCache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
-                setScFromStorage(typeof kwnrCache.SC === 'number' ? kwnrCache.SC : 0);
-            } catch {
-                setScFromStorage(0);
-            }
-        };
-        window.addEventListener('kwnr-sc-changed', handleKwnrScChanged);
-        // Odczytaj na starcie
-        handleKwnrScChanged();
-        return () => {
-            window.removeEventListener('kwnr-sc-changed', handleKwnrScChanged);
-        };
-    }, []);
+    // Usunięto nasłuch SC z sessionStorage – SC liczymy dynamicznie z SG + SN + DS
     // Stan formularza rozliczenia
     const [settleTarget, setSettleTarget] = useState(null); // 'Gabi' | 'Norf' | null
     const [settleAmount, setSettleAmount] = useState('');
@@ -161,17 +171,35 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
             // Log przed wysłaniem, aby sprawdzić co dokładnie wysyłamy
             console.log("Wysyłam do API następujące dane:", JSON.stringify(payload, null, 2));
             
-            const response = await fetch('http://localhost:3001/api/expenses', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+            const doPost = async () => fetch('http://localhost:3001/api/expenses', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
             });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
+            let response = await doPost();
+            let result;
+            try { result = await response.json(); } catch { result = {}; }
+
+            if (response.status === 202 && result?.needsConfirmation) {
+                const retried = await ensureMonthAndRetry(result, async () => { response = await doPost(); });
+                if (retried) {
+                    try { result = await response.json(); } catch { result = {}; }
+                }
+            }
+
+            if (response.ok && response.status !== 202) {
                 // Wyświetl komunikat o sukcesie
                 alert(`Wydatek "${newExpense.name}" został dodany`);
+
+                // Zapisz ostatni wydatek do localStorage (trwały)
+                try {
+                    const last = {
+                        category: 'Wydatek KWNR',
+                        subcategory: newExpense.name,
+                        amount: amount.toString(),
+                        date: selectedDate,
+                    };
+                    localStorage.setItem('lastExpense', JSON.stringify(last));
+                    window.dispatchEvent(new CustomEvent('last-expense-updated', { detail: last }));
+                } catch { /* ignore */ }
                 
                 // Resetuj formularz
                 setNewExpense({
@@ -193,7 +221,7 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                 setTimeout(() => {
                     fetchKwnrData();
                 }, 500);
-            } else {
+            } else if (!response.ok) {
                 alert(`Błąd: ${result.message || 'Nie udało się zapisać wydatku'}`);
             }
         } catch (error) {
@@ -308,21 +336,21 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
             console.log("Wysyłam do API aktualizację:", JSON.stringify({ original, updated }, null, 2));
             
             // Wysłanie żądania do API
-            const response = await fetch('http://localhost:3001/api/expenses', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ original, updated })
+            const doPut = async () => fetch('http://localhost:3001/api/expenses', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ original, updated })
             });
-            
+            let response = await doPut();
             let result;
-            try {
-                result = await response.json();
-            } catch (jsonError) {
-                console.error("Błąd parsowania odpowiedzi JSON:", jsonError);
-                result = { message: "Serwer zwrócił nieprawidłową odpowiedź." };
+            try { result = await response.json(); } catch { result = {}; }
+
+            if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+                const retried = await ensureMonthAndRetry(result, async () => { response = await doPut(); });
+                if (retried) {
+                    try { result = await response.json(); } catch { result = {}; }
+                }
             }
-            
-            if (response.ok) {
+
+            if (response.ok && response.status !== 202) {
                 alert(`Wydatek "${editExpense.name}" został zaktualizowany`);
                 
                 // Zamknij modal i zresetuj stan edycji
@@ -333,7 +361,7 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                 setTimeout(() => {
                     fetchKwnrData();
                 }, 500);
-            } else {
+            } else if (!response.ok) {
                 console.error("Błąd podczas aktualizacji wydatku:", result);
                 alert(`Błąd: ${result.message || `Nie udało się zaktualizować wydatku (kod ${response.status})`}`);
             }
@@ -381,6 +409,20 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                     result = { message: "Serwer zwrócił nieprawidłową odpowiedź." };
                 }
                 
+                // Obsługa zamkniętego miesiąca
+                if (response.status === 202 && result?.needsConfirmation && result.action === 'reopen_month' && result.month_id) {
+                    const confirmReopen = window.confirm(result.message || `Miesiąc ${result.month_id} jest zamknięty. Otworzyć aby usunąć?`);
+                    if (confirmReopen) {
+                        const reopenResp = await fetch(`http://localhost:3001/api/months/${result.month_id}/reopen`, { method: 'POST' });
+                        if (reopenResp.ok) {
+                            return await handleDeleteExpense(expense);
+                        } else {
+                            alert('Nie udało się otworzyć miesiąca');
+                        }
+                    }
+                    return; // zakończ
+                }
+
                 if (response.ok) {
                     console.log("Pomyślnie usunięto wydatek:", result);
                     
@@ -630,14 +672,16 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                     person: settleTarget
                 }
             }];
-            const resp = await fetch('http://localhost:3001/api/expenses', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!resp.ok) {
-                const txt = await resp.text();
-                throw new Error(txt || 'Błąd zapisu rozliczenia');
+            const doPost = async () => fetch('http://localhost:3001/api/expenses', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            let resp = await doPost();
+            let info = {};
+            try { info = await resp.json(); } catch { info = {}; }
+            if (resp.status === 202 && info?.needsConfirmation) {
+                const retried = await ensureMonthAndRetry(info, async () => { resp = await doPost(); });
+                if (retried) { try { info = await resp.json(); } catch { info = {}; } }
+            }
+            if (!resp.ok || resp.status === 202) {
+                throw new Error(info.message || 'Błąd zapisu rozliczenia');
             }
             cancelSettlement();
             setTimeout(()=>fetchKwnrData(),400);
@@ -719,14 +763,16 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                     updated: { account: 'KWNR', amount: amt.toString(), date, description: editTransfer.originalDescription }
                 };
             }
-            const resp = await fetch('http://localhost:3001/api/expenses', {
-                method: 'PUT',
-                headers: { 'Content-Type':'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!resp.ok) {
-                const txt = await resp.text();
-                throw new Error(txt || 'Błąd aktualizacji');
+            const doPut = async () => fetch('http://localhost:3001/api/expenses', { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
+            let resp = await doPut();
+            let info = {};
+            try { info = await resp.json(); } catch { info = {}; }
+            if (resp.status === 202 && info?.needsConfirmation && info.action === 'reopen_month' && info.month_id) {
+                const retried = await ensureMonthAndRetry(info, async () => { resp = await doPut(); });
+                if (retried) { try { info = await resp.json(); } catch { info = {}; } }
+            }
+            if (!resp.ok || resp.status === 202) {
+                throw new Error(info.message || 'Błąd aktualizacji');
             }
             setIsEditTransferModalOpen(false);
             setEditTransfer(null);
@@ -755,8 +801,8 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                         <button className="settle-btn" disabled={isLoading || Math.abs(norfBalance) < 0.005} onClick={()=>startSettlement('Norf')}>Rozlicz</button>
                     </div>
                     <div className="balance-card total">
-                        <div className="person">Saldo całkowite (SC)</div>
-                        <div className="amount">{formatCurrency(scFromStorage)}</div>
+                        <div className="person">Saldo całkowite</div>
+                        <div className="amount">{formatCurrency((gabiBalance || 0) + (norfBalance || 0) + (availableFunds || 0))}</div>
                     </div>
                 </div>
             </div>

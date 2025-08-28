@@ -4,7 +4,7 @@ import './AccountTransactionsModal.css';
 import './AccountBalances.css';
 import KwnrAccountView from './KwnrAccountView';
 
-function AccountBalances({ refreshKey }) {
+function AccountBalances({ refreshKey, selectedMonthId }) {
     const [accountBalances, setAccountBalances] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -38,7 +38,6 @@ function AccountBalances({ refreshKey }) {
 
         // Nasłuchuj na event synchronizacji SC z KWNR
         const handleKwnrScChanged = () => {
-            // Wymuś ponowny render przez zmianę stanu (np. setAccountBalances kopia)
             setAccountBalances(accs => [...accs]);
         };
         window.addEventListener('kwnr-sc-changed', handleKwnrScChanged);
@@ -135,18 +134,16 @@ function AccountBalances({ refreshKey }) {
 
     // Funkcja do obsługi kliknięcia w nazwę konta
     const handleAccountClick = async (accountName) => {
-        // Obsługujemy konta Oszczędnościowe, Rachunki i KWNR
-        if (accountName === 'Oszczędnościowe' || accountName === 'Rachunki' || accountName === 'KWNR') {
+        // Dla KWNR nie pobieraj tu transakcji (widok KWNR ładuje pełną historię samodzielnie)
+        if (accountName === 'KWNR') {
+            setShowAllTransactions(false);
+            setTransactions([]);
+            setSelectedAccount(accountName);
+            return;
+        }
+        if (accountName === 'Oszczędnościowe' || accountName === 'Rachunki') {
             try {
-                // Pobierz transakcje tylko dla bieżącego miesiąca (domyślnie)
                 const accountTransactions = await fetchTransactions(accountName, false);
-                
-                // Jeśli to konto Rachunki, odśwież również listę śledzonych transferów
-                if (accountName === 'Rachunki') {
-                    // Wyczyść zapisane dane transferów w localStorage, aby wymusić ich ponowne przetworzenie
-                    localStorage.removeItem('billsAccountTransfers');
-                }
-                
                 setShowAllTransactions(false);
                 setTransactions(accountTransactions);
                 setSelectedAccount(accountName);
@@ -190,18 +187,15 @@ function AccountBalances({ refreshKey }) {
                 </thead>
                 <tbody>
                     {accountBalances.map(account => {
+                        // Dla KWNR pokaż Saldo całkowite (SC = SG + SN + DS) synchronizowane z widoku KWNR przez sessionStorage
                         let displayBalance = account.current_balance;
                         if (account.name === 'KWNR') {
-                            // Pobierz SC z sessionStorage
                             try {
-                                const kwnrCache = JSON.parse(sessionStorage.getItem('kwnrDerived') || '{}');
-                                let sc = kwnrCache.SC;
-                                if (sc === undefined || sc === null || isNaN(Number(sc)) || Number(sc) === 0) {
-                                    displayBalance = 0;
-                                } else {
-                                    displayBalance = sc;
+                                const derived = JSON.parse(sessionStorage.getItem('kwnrDerived') || 'null');
+                                if (derived && typeof derived.SC === 'number') {
+                                    displayBalance = derived.SC;
                                 }
-                            } catch { displayBalance = 0; }
+                            } catch { /* ignore */ }
                         }
                         return (
                         <tr key={account.id}>
@@ -233,6 +227,7 @@ function AccountBalances({ refreshKey }) {
                     showAllTransactions={showAllTransactions}
                     onShowAllTransactions={handleShowAllTransactions}
                     currentAccountBalance={accountBalances.find(acc => acc.name === selectedAccount)?.current_balance}
+                    selectedMonthId={selectedMonthId}
                 />
             )}
         </div>

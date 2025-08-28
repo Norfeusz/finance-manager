@@ -8,9 +8,11 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const getTransactions = async (req, res) => {
     console.log('START getTransactions');
     try {
-        const year = req.query.year || new Date().getFullYear();
-        const month = req.query.month || new Date().getMonth() + 1;
-        const accountName = req.query.account || req.params.accountName;
+    const year = req.query.year || new Date().getFullYear();
+    const month = req.query.month || new Date().getMonth() + 1;
+    const monthIdParam = req.query.month_id; // nowy bezpośredni identyfikator w formacie YYYY-MM
+    const accountName = req.query.account || req.params.accountName;
+    console.log('[getTransactions] accountName param =', accountName, 'query.month_id =', req.query.month_id, 'year=', req.query.year, 'month=', req.query.month);
         
         const client = await pool.connect();
         
@@ -22,46 +24,71 @@ const getTransactions = async (req, res) => {
             let queryParams = [];
             
             if (accountName) {
-                // Jeśli podano nazwę konta, pobierz transakcje tylko dla tego konta, niezależnie od miesiąca
+                // Jeśli podano nazwę konta, pobierz transakcje dla tego widoku
                 console.log(`Pobieranie transakcji dla konta: ${accountName}`);
-                
+
                 const accountResult = await client.query(
                     'SELECT id FROM accounts WHERE name = $1',
                     [accountName]
                 );
-                
+
                 if (accountResult.rows.length === 0) {
                     // Jeśli konto nie istnieje, zwróć pustą tablicę
                     return res.status(200).json({ transactions: [], balance: 0 });
                 }
-                
+
                 const accountId = accountResult.rows[0].id;
-                whereClause = 'WHERE t.account_id = $1';
-                queryParams = [accountId];
-                
+
+                if (accountName === 'KWNR') {
+                    // Specjalny przypadek: KWNR ma pokazywać całą historię wydatków KWNR
+                    // (niezależnie od tego, na jakim koncie były historycznie zapisane)
+                    // oraz wszystkie operacje wykonane bezpośrednio na koncie KWNR (np. wpływy).
+                    // Pokazujemy:
+                    // - wszystkie operacje na koncie KWNR (t.account_id = KWNR)
+                    // - wszystkie pozycje w kategoriach związanych z KWNR (np. 'Wydatek KWNR', 'Transfer na KWNR', inne z 'KWNR' w nazwie)
+                    // - fallback: wpisy z tekstowym wzmiankowaniem 'KWNR' w opisie/extra
+                    whereClause = `WHERE t.account_id = $1
+                                   OR c.name = 'Wydatek KWNR'
+                                   OR c.name = 'Transfer na KWNR'
+                                   OR c.name ILIKE '%KWNR%'
+                                   OR t.description ILIKE '%KWNR%'
+                                   OR t.extra_description ILIKE '%KWNR%'`;
+                    queryParams = [accountId];
+                    console.log('[KWNR] whereClause:', whereClause, 'params:', queryParams);
+                } else {
+                    // Standard: tylko transakcje danego konta
+                    whereClause = 'WHERE t.account_id = $1';
+                    queryParams = [accountId];
+                    console.log('[ACCOUNT] whereClause:', whereClause, 'params:', queryParams);
+                }
+
                 // Pobierz aktualne saldo konta
                 const balanceResult = await client.query(
                     'SELECT current_balance FROM account_balances WHERE account_id = $1',
                     [accountId]
                 );
-                
+
                 const balance = balanceResult.rows.length > 0 ? parseFloat(balanceResult.rows[0].current_balance) : 0;
-                
+
             } else {
-                // Standardowe przetwarzanie dla miesiąca
-                monthResult = await client.query(
-                    'SELECT id FROM months WHERE year = $1 AND month = $2',
-                    [year, month]
-                );
-                
-                if (monthResult.rows.length === 0) {
-                    // Jeśli miesiąc nie istnieje, zwróć pustą tablicę
-                    return res.status(200).json([]);
+                if (monthIdParam) {
+                    // Używamy bezpośrednio tekstowego month_id
+                    monthId = monthIdParam;
+                    whereClause = 'WHERE t.month_id = $1';
+                    queryParams = [monthId];
+                } else {
+                    // Legacy: year + month -> month_id
+                    monthResult = await client.query(
+                        'SELECT id FROM months WHERE year = $1 AND month = $2',
+                        [year, month]
+                    );
+                    if (monthResult.rows.length === 0) {
+                        return res.status(200).json([]);
+                    }
+                    monthId = monthResult.rows[0].id;
+                    whereClause = 'WHERE t.month_id = $1';
+                    queryParams = [monthId];
                 }
-                
-                monthId = monthResult.rows[0].id;
-                whereClause = 'WHERE t.month_id = $1';
-                queryParams = [monthId];
             }
             
             // Najpierw sprawdźmy, czy tabela ma nowe kolumny
@@ -78,6 +105,7 @@ const getTransactions = async (req, res) => {
             
             // Pobierz wszystkie transakcje dla danego kryterium (miesiąc lub konto) wraz z powiązanymi danymi
             let query;
+            // Zawsze dołączamy join do categories (alias c), bo whereClause dla KWNR może referować c.name
             if (hasSourceColumns) {
                 query = `SELECT 
                     t.id, t.type, t.amount, t.description, t.extra_description, t.date AS raw_date, t.date, t.balance_after,
@@ -95,7 +123,7 @@ const getTransactions = async (req, res) => {
                     subcategories sc ON t.subcategory_id = sc.id
                 ${whereClause}
                 ORDER BY 
-                    t.date DESC`;
+                    t.date DESC, t.id DESC`;
             } else {
                 // Zapytanie bez nowych kolumn
                 query = `SELECT 
@@ -113,10 +141,12 @@ const getTransactions = async (req, res) => {
                     subcategories sc ON t.subcategory_id = sc.id
                 ${whereClause}
                 ORDER BY 
-                    t.date DESC`;
+                    t.date DESC, t.id DESC`;
             }
             
+            console.log('[QUERY] Executing SQL with whereClause:', whereClause);
             const transactionsResult = await client.query(query, queryParams);
+            console.log('[QUERY] Rows returned:', transactionsResult.rows.length);
             
             // Mapowanie kategorii z bazy danych na kategorie frontendu
             const categoryMapping = {
@@ -247,6 +277,7 @@ const getTransactions = async (req, res) => {
                     amount: parseFloat(transaction.amount),
                     description: transaction.description || frontendSubcategory, // Używamy opisu lub nazwy podkategorii
                     extraDescription: transaction.extra_description,
+                    extra_description: transaction.extra_description,
                     date: formattedDate
                 };
                 

@@ -1,0 +1,52 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "node-debug-kwnr",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"backend/scripts/debugKwnr.js"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "node ad-hoc KWNR query",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"-e",
+				"(async()=>{const pool=require('./backend/db/pool');const c=await pool.connect();try{const q=`SELECT t.id,t.type,t.amount,t.description,t.extra_description,t.date,a.name acc,c2.name cat FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id LEFT JOIN categories c2 ON c2.id=t.category_id WHERE t.description ILIKE '%KWNR%' OR t.extra_description ILIKE '%KWNR%' OR c2.name ILIKE '%KWNR%' ORDER BY t.date DESC, t.id DESC LIMIT 20`;const r=await c.query(q);console.log(r.rows);}catch(e){console.error(e);}finally{c.release();}})()"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "seed-kwnr",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"backend/scripts/seedKwnrSample.js"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "node-debug-kwnr-again",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"backend/scripts/debugKwnr.js"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

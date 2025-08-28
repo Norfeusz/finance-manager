@@ -336,7 +336,8 @@ const TransferFields = () => {
 
 // -- Główny komponent formularza --
 
-function DataEntryForm({ onNewEntry }) {
+function DataEntryForm({ onNewEntry, selectedMonthId, isMonthClosed, onRefresh, onAddMonth, onToggleMonthLock }) {
+    // informacyjne propsy dostępne niżej (blokada realizowana w części renderowania na dole)
   const [flowType, setFlowType] = useState('expense');
   const [mainCategory, setMainCategory] = useState('');
   const [responseMessage, setResponseMessage] = useState({ text: '', type: '' });
@@ -517,12 +518,9 @@ function DataEntryForm({ onNewEntry }) {
         }
     } else if (flowType === 'transfer') {
         const fromAccount = form.elements.fromAccount.value;
-        const toAccount = form.elements.toAccount.value;
         const amount = parseFloat(form.elements.amount.value);
 
         // Specjalna obsługa dla transferów na KWNR
-        const isKwnrTransfer = toAccount === 'KWNR';
-        
         // Sprawdź saldo konta źródłowego przed wykonaniem transferu
         try {
             const checkResponse = await fetch(`http://localhost:3001/api/accounts/check-balance`, {
@@ -553,72 +551,125 @@ function DataEntryForm({ onNewEntry }) {
     }
     
     try {
-        // Sprawdź czy to transfer do KWNR
+        // Specjalne traktowanie transferu do KWNR
         if (flowType === 'transfer') {
             const toAccount = form.elements.toAccount.value;
             const fromAccount = form.elements.fromAccount.value;
             const amount = parseFloat(form.elements.amount.value);
-            const date = form.elements.date.value;
+            const dateVal = form.elements.date.value;
             const extraDescription = form.elements.extra_description?.value || '';
-
-            // Jeśli transfer idzie na konto KWNR, traktujemy go jako specjalny wydatek
             if (toAccount === 'KWNR') {
-                // Modyfikujemy payload, aby traktować to jako wydatek z opisem "Transfer na KWNR"
                 payload = [{
                     flowType: 'expense',
                     data: {
                         account: fromAccount,
                         cost: amount.toString(),
-                        date: date,
-                        mainCategory: 'Transfer na KWNR',  // Używamy kategorii "Transfer na KWNR" 
+                        date: dateVal,
+                        mainCategory: 'Transfer na KWNR',
                         description: 'Transfer na KWNR',
                         extra_description: extraDescription,
-                        isKwnrTransfer: true // Specjalny znacznik dla backendu
+                        isKwnrTransfer: true
                     }
                 }];
             }
         }
 
-        const response = await fetch('http://localhost:3001/api/expenses', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const result = await response.json();
-        if (response.ok) {
-            setResponseMessage({ text: result.message, type: 'success' });
-            form.reset();
-            setMainCategory('');
-            setShoppingBreakdown(null);
-            setDate(new Date().toISOString().slice(0, 10));
-            setIncomeFrom('');
-            setAdvanceType('current');
-            
-            // Jeśli dodano nową kategorię, dodaj ją do listy kategorii użytkownika
-            if (flowType === 'expense' && mainCategory === 'new' && form.elements.newCategoryName) {
-                const newCategory = form.elements.newCategoryName.value.trim().toLowerCase();
-                if (newCategory && !userAddedCategories.includes(newCategory)) {
-                    const updatedCategories = [...userAddedCategories, newCategory];
-                    setUserAddedCategories(updatedCategories);
-                    // Zapisz zaktualizowaną listę w localStorage
-                    localStorage.setItem('userAddedCategories', JSON.stringify(updatedCategories));
+        // Helper do właściwego wysyłania + obsługi confirm
+        const submitPayload = async (attemptPayload, depth = 0) => {
+            const resp = await fetch('http://localhost:3001/api/expenses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(attemptPayload)
+            });
+            let json;
+            try { json = await resp.json(); } catch { json = {}; }
+
+            // Obsługa statusu 202 require confirm
+            if (resp.status === 202 && json.needsConfirmation && depth < 2) {
+                const monthId = json.month_id;
+                if (json.action === 'create_month') {
+                    const ok = window.confirm(json.message || `Miesiąc ${monthId} nie istnieje. Utworzyć?`);
+                    if (!ok) { setResponseMessage({ text: 'Anulowano tworzenie miesiąca.', type: 'error' }); return; }
+                    const ensureResp = await fetch('http://localhost:3001/api/months/ensure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ month_id: monthId, allowCreate: true })
+                    });
+                    if (!ensureResp.ok) { setResponseMessage({ text: 'Nie udało się utworzyć miesiąca.', type: 'error' }); return; }
+                    await submitPayload(attemptPayload, depth + 1);
+                    return;
+                }
+                if (json.action === 'reopen_month') {
+                    const ok = window.confirm(json.message || `Miesiąc ${monthId} jest zamknięty. Otworzyć i dodać przepływ?`);
+                    if (!ok) { setResponseMessage({ text: 'Anulowano otwieranie miesiąca.', type: 'error' }); return; }
+                    const ensureResp = await fetch('http://localhost:3001/api/months/ensure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ month_id: monthId, allowReopen: true })
+                    });
+                    if (!ensureResp.ok) { setResponseMessage({ text: 'Nie udało się otworzyć miesiąca.', type: 'error' }); return; }
+                    await submitPayload(attemptPayload, depth + 1);
+                    return;
                 }
             }
-            
-            onNewEntry();
-        } else {
-            setResponseMessage({ text: `Błąd: ${result.message}`, type: 'error' });
-        }
+
+            if (resp.ok) {
+                setResponseMessage({ text: json.message || 'Zapisano.', type: 'success' });
+                                // Po sukcesie: jeśli to był wydatek, zapisz "ostatni wydatek" w localStorage
+                                try {
+                                    const first = Array.isArray(attemptPayload) ? attemptPayload[0] : null;
+                                    const isExpense = first && first.flowType === 'expense';
+                                    if (isExpense) {
+                                        const d = first.data || {};
+                                        const amount = d.cost || d.amount;
+                                        const last = {
+                                            category: d.mainCategory || d.category || 'wydatek',
+                                            subcategory: d.subCategory || d.description || '',
+                                            amount: amount,
+                                            date: d.date,
+                                        };
+                                        localStorage.setItem('lastExpense', JSON.stringify(last));
+                                        window.dispatchEvent(new CustomEvent('last-expense-updated', { detail: last }));
+                                    }
+                                } catch { /* ignore */ }
+                form.reset();
+                setMainCategory('');
+                setShoppingBreakdown(null);
+                setDate(new Date().toISOString().slice(0, 10));
+                setIncomeFrom('');
+                setAdvanceType('current');
+                if (flowType === 'expense' && mainCategory === 'new' && form.elements.newCategoryName) {
+                    const newCategory = form.elements.newCategoryName.value.trim().toLowerCase();
+                    if (newCategory && !userAddedCategories.includes(newCategory)) {
+                        const updated = [...userAddedCategories, newCategory];
+                        setUserAddedCategories(updated);
+                        localStorage.setItem('userAddedCategories', JSON.stringify(updated));
+                    }
+                }
+                onNewEntry();
+            } else {
+                setResponseMessage({ text: `Błąd: ${json.message || 'Nieznany'}`, type: 'error' });
+            }
+        };
+
+        await submitPayload(payload);
     } catch (err) {
         console.error('Błąd podczas zapisywania danych:', err);
         setResponseMessage({ text: 'Błąd połączenia z serwerem.', type: 'error' });
     }
   };
 
+        const monthLocked = isMonthClosed; // alias używany w renderowaniu
+
   return (
     <div className="card form-card">
         <h2>Dodaj nowy przepływ</h2>
-        <form id="expense-form" onSubmit={handleSubmit}>
+                <form id="expense-form" onSubmit={handleSubmit} className={monthLocked ? 'month-locked' : ''}>
+                        {monthLocked && (
+                            <div style={{background:'#fff4d6', border:'1px solid #e0a800', padding:'8px', marginBottom:'12px', fontSize:'0.9rem'}}>
+                                Miesiąc {selectedMonthId} jest zamknięty — przy próbie zapisu zapytamy o otwarcie.
+                            </div>
+                        )}
             <div className="form-group flow-type">
                 <label className={flowType === 'expense' ? 'active' : ''}><input type="radio" name="flowType" value="expense" checked={flowType === 'expense'} onChange={() => setFlowType('expense')} /> Wydatek</label>
                 <label className={flowType === 'income' ? 'active' : ''}><input type="radio" name="flowType" value="income" checked={flowType === 'income'} onChange={() => setFlowType('income')} /> Wpływ</label>
@@ -663,6 +714,17 @@ function DataEntryForm({ onNewEntry }) {
             </div>
 
             <button type="submit">Dodaj wpis do archiwum</button>
+            {/* Szybkie akcje przeniesione do stopki formularza, aby były zawsze widoczne */}
+            <div className="quick-actions" style={{marginTop:'12px'}}>
+                <div className="qa-title">Szybkie akcje</div>
+                <div className="qa-buttons">
+                    <button type="button" className="btn-sm" onClick={() => onRefresh && onRefresh()}>Odśwież</button>
+                    <button type="button" className="btn-sm" onClick={() => onAddMonth && onAddMonth()}>Dodaj miesiąc</button>
+                    <button type="button" className="btn-sm" onClick={() => onToggleMonthLock && onToggleMonthLock()}>
+                        {isMonthClosed ? 'Otwórz miesiąc' : 'Zamknij miesiąc'}
+                    </button>
+                </div>
+            </div>
         </form>
         {responseMessage.text && <div id="response-message" className={responseMessage.type}>{responseMessage.text}</div>}
     </div>

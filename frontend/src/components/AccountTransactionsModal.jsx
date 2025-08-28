@@ -4,7 +4,7 @@ import BillsTable from './BillsTable';
 import KwnrAccountView from './KwnrAccountView';
 import './AccountTransactionsModal.css';
 
-function AccountTransactionsModal({ isOpen, onClose, accountName, transactions, showAllTransactions = false, onShowAllTransactions, currentAccountBalance }) {
+function AccountTransactionsModal({ isOpen, onClose, accountName, transactions, showAllTransactions = false, onShowAllTransactions, currentAccountBalance, selectedMonthId }) {
     // Funkcja pomocnicza do formatowania waluty
     const formatCurrency = (value) => {
         if (value === null || value === undefined) return '-';
@@ -46,24 +46,19 @@ function AccountTransactionsModal({ isOpen, onClose, accountName, transactions, 
         <Modal isOpen={isOpen} onClose={onClose} title={accountName === 'KWNR' ? 'Konto wydatków nieregularnych' : `Przepływy konta: ${accountName}`}>
             <div className="account-transactions-list">
                 {/* Specjalna tabela dla konta Rachunki */}
-                {accountName === 'Rachunki' && (
+        {accountName === 'Rachunki' && (
                     <BillsTable 
                         transactions={transactions} 
                         key={transactions.length} // Wymuszenie rerender przy zmianie transakcji
-                        currentBalance={currentAccountBalance} // Przekazanie bieżącego salda z bazy danych
+            currentBalance={currentAccountBalance} // Przekazanie bieżącego salda z bazy danych
+            selectedMonthId={selectedMonthId}
                     />
                 )}
                 
                 {/* Specjalny widok dla konta wydatków nieregularnych */}
-                {accountName === 'KWNR' && (
-                    <>
-                        <KwnrAccountView 
-                            transactions={transactions}
-                            key={transactions.length} // Wymuszenie rerender przy zmianie transakcji
-                            currentBalance={currentAccountBalance} // Przekazanie bieżącego salda z bazy danych
-                        />
-                    </>
-                )}
+                    {accountName === 'KWNR' && (
+                        <KwnrAccountView />
+                    )}
                 
                 {/* Lista transakcji dla wszystkich kont (nie pokazujemy dla KWNR i Rachunki) */}
                 {accountName !== 'KWNR' && accountName !== 'Rachunki' && (

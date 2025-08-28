@@ -24,10 +24,12 @@ const EXCLUDED_STATS_CATEGORIES = ['transfer', 'transfer na kwnr'];
 const isExcludedStatsCategory = (cat) => !!cat && EXCLUDED_STATS_CATEGORIES.includes(cat.trim().toLowerCase());
 
 // ZMIANA TUTAJ: Komponent przyjmuje onDataChange
-function ShoppingStats({ refreshKey, transactions, onDataChange }) {
+function ShoppingStats({ refreshKey, transactions, onDataChange, selectedMonthId }) {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, category: '', transactions: [] });
+    const [prevMonthTransactions, setPrevMonthTransactions] = useState([]);
+    const [closedMonthsAverages, setClosedMonthsAverages] = useState({});
     // Stan do edycji nazwy kategorii
     const [editingCategory, setEditingCategory] = useState(null);
     const [editingCategoryName, setEditingCategoryName] = useState('');
@@ -146,6 +148,25 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
         }
     }, [transactions, categoryDisplayNames, mainCategories, subCategories]);
 
+    // Pobierz transakcje z poprzedniego miesiąca do kolumny "Poprzedni miesiąc"
+    useEffect(() => {
+        const fetchPrev = async () => {
+            try {
+                if (!selectedMonthId || !/^\d{4}-\d{2}$/.test(selectedMonthId)) { setPrevMonthTransactions([]); return; }
+                const [y, m] = selectedMonthId.split('-').map(Number);
+                const d = new Date(y, m - 1, 1); d.setMonth(d.getMonth() - 1);
+                const prevId = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const resp = await fetch(`http://localhost:3001/api/transactions?month_id=${prevId}`);
+                if (!resp.ok) { setPrevMonthTransactions([]); return; }
+                const data = await resp.json();
+                setPrevMonthTransactions(Array.isArray(data) ? data : []);
+            } catch {
+                setPrevMonthTransactions([]);
+            }
+        };
+        fetchPrev();
+    }, [selectedMonthId]);
+
     useEffect(() => {
         const fetchStats = async () => {
             setLoading(true);
@@ -162,15 +183,52 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
         fetchStats();
     }, [refreshKey]);
 
+    // Pobierz średnie z zamkniętych miesięcy wcześniejszych niż wybrany
+    useEffect(() => {
+        const fetchAverages = async () => {
+            try {
+                if (!selectedMonthId) { setClosedMonthsAverages({}); return; }
+                const r = await fetch(`http://localhost:3001/api/statistics/shopping/averages?month_id=${selectedMonthId}`);
+                if (!r.ok) { setClosedMonthsAverages({}); return; }
+                const js = await r.json();
+                setClosedMonthsAverages(js.averages || {});
+            } catch (e) {
+                console.warn('Błąd pobierania średnich:', e);
+                setClosedMonthsAverages({});
+            }
+        };
+        fetchAverages();
+    }, [selectedMonthId]);
+
     const handleCategoryClick = (categoryKey) => {
         let relevantTransactions = [];
-        if (subCategories.includes(categoryKey)) {
+        // Filtrujemy do wybranego miesiąca, jeśli dostępny
+        const inSelectedMonth = (t) => {
+            if (!selectedMonthId) return true;
+            if (!t || !t.date) return false;
+            // t.date może być YYYY-MM-DD lub ISO z T
+            const dateStr = String(t.date);
+            if (dateStr.includes('T')) {
+                const d = new Date(dateStr);
+                const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                return ym === selectedMonthId;
+            }
+            return dateStr.startsWith(selectedMonthId);
+        };
+
+    const norm = (s) => (s || '').toString().trim().toLowerCase();
+    const catKeyL = norm(categoryKey);
+    const isSub = subCategories.map(norm).includes(catKeyL);
+
+    if (isSub) {
             relevantTransactions = transactions.filter(t => {
-                return t.category === 'zakupy codzienne' && 
-                       (t.description === categoryKey || t.subcategory === categoryKey);
+        return inSelectedMonth(t)
+            && t.type === 'expense'
+            && norm(t.category) === 'zakupy codzienne'
+            && (norm(t.description) === catKeyL || norm(t.subcategory) === catKeyL);
             });
         } else {
-            relevantTransactions = transactions.filter(t => t.category === categoryKey);
+        relevantTransactions = transactions.filter(t => inSelectedMonth(t) && t.type === 'expense' && norm(t.category) === catKeyL);
         }
 
         setModalInfo({
@@ -251,10 +309,78 @@ function ShoppingStats({ refreshKey, transactions, onDataChange }) {
     
     const renderRow = (catKey) => {
     if (isExcludedStatsCategory(catKey)) return null; // Ukrywamy w tabeli
+        // Oblicz wartość “Ten miesiąc” na podstawie transakcji z wybranego miesiąca
+        const monthFilter = (t) => {
+            if (!selectedMonthId) return true;
+            const dateStr = String(t.date || '');
+            if (dateStr.includes('T')) {
+                const d = new Date(dateStr);
+                const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                return ym === selectedMonthId;
+            }
+            return dateStr.startsWith(selectedMonthId);
+        };
 
-    const currentValue = (stats.currentMonth[catKey] || 0);
-    const prevValue = (stats.previousMonth[catKey] || 0);
-    const avgValue = (stats.historicalAverage[catKey] || 0);
+    let currentValue = 0;
+    if (Array.isArray(transactions) && transactions.length) {
+        const norm = (s) => (s || '').toString().trim().toLowerCase();
+        const catKeyL = norm(catKey);
+        const isSub = subCategories.map(norm).includes(catKeyL);
+        if (isSub) {
+                currentValue = transactions
+            .filter(t => t.type === 'expense' && monthFilter(t) && norm(t.category) === 'zakupy codzienne' && (norm(t.description) === catKeyL || norm(t.subcategory) === catKeyL))
+                    .reduce((s, t) => s + Number(t.cost || t.amount || 0), 0);
+            } else {
+                currentValue = transactions
+            .filter(t => t.type === 'expense' && monthFilter(t) && norm(t.category) === catKeyL)
+                    .reduce((s, t) => s + Number(t.cost || t.amount || 0), 0);
+            }
+        }
+        // Oblicz “Poprzedni miesiąc” z transakcji poprzedniego miesiąca
+        let prevValue = 0;
+        if (Array.isArray(prevMonthTransactions) && prevMonthTransactions.length) {
+            const norm = (s) => (s || '').toString().trim().toLowerCase();
+            const catKeyL = norm(catKey);
+            const isSub = subCategories.map(norm).includes(catKeyL);
+            if (isSub) {
+                prevValue = prevMonthTransactions
+                    .filter(t => t.type === 'expense' && norm(t.category) === 'zakupy codzienne' && (norm(t.description) === catKeyL || norm(t.subcategory) === catKeyL))
+                    .reduce((s, t) => s + Number(t.cost || t.amount || 0), 0);
+            } else {
+                prevValue = prevMonthTransactions
+                    .filter(t => t.type === 'expense' && norm(t.category) === catKeyL)
+                    .reduce((s, t) => s + Number(t.cost || t.amount || 0), 0);
+            }
+        }
+        // Specjalny override: dla sierpnia 2025 pokazuj sztywne wartości dla poprzedniego miesiąca
+        if (selectedMonthId === '2025-08') {
+            const overrides = {
+                'zakupy codzienne': 1212.43,
+                'jedzenie': 995.48,
+                'słodycze': 56.78,
+                'chemia': 62.28,
+                'apteka': 30.01,
+                'alkohol': 49.91,
+                'higiena': 17.97,
+                'kwiatki': 0,
+                'auta': 8584.2,
+                'dom': 254.27,
+                'wyjścia i szama do domu': 202.97,
+                'pies': 0,
+                'prezenty': 746
+            };
+            const keyL = (catKey || '').toString().trim().toLowerCase();
+            if (Object.prototype.hasOwnProperty.call(overrides, keyL)) {
+                prevValue = overrides[keyL];
+            }
+        }
+        // Fallback do backendowych statystyk, jeśli nie mamy danych transakcyjnych
+        if (!prevValue && stats && stats.previousMonth && stats.previousMonth[catKey]) {
+            prevValue = stats.previousMonth[catKey] || 0;
+        }
+    // Pierwszy wariant średniej: średnia ze wszystkich zamkniętych miesięcy wcześniejszych niż wybrany miesiąc
+    const normKey = (catKey || '').toString().trim().toLowerCase();
+    const avgValue = closedMonthsAverages[normKey] || 0;
         
         // Sprawdź, czy to nowa kategoria (dodana w bieżącym miesiącu)
         const isNewCategory = prevValue === 0 && avgValue === 0 && (currentValue > 0 || mainCategories.includes(catKey) || subCategories.includes(catKey));

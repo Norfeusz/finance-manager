@@ -2,11 +2,15 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const { 
-    getAccountBalances, 
-    updateAccountInitialBalance, 
-    recalculateAllAccountBalances, 
-    checkAccountBalance,
-    updateAccountCurrentBalance
+  getAccountBalances, 
+  updateAccountInitialBalance, 
+  recalculateAllAccountBalances, 
+  checkAccountBalance,
+  updateAccountCurrentBalance,
+  getBillsMonthState,
+  setBillsOpeningBalance,
+  listBillsDeductions,
+  applyBillsDeduction
 } = require('../controllers/accountController');
 const { getTransactions } = require('../controllers/transactionController');
 
@@ -39,6 +43,60 @@ router.post('/check-balance', checkAccountBalance);
  * PUT /api/accounts/current-balance - aktualizacja bieżącego salda konta
  */
 router.put('/current-balance', updateAccountCurrentBalance);
+
+// Rachunki: stan miesięczny i operacje
+router.get('/bills/:monthId', getBillsMonthState);
+router.post('/bills/:monthId/opening', setBillsOpeningBalance);
+router.get('/bills/:monthId/deductions', listBillsDeductions);
+router.post('/bills/:monthId/deduct', applyBillsDeduction);
+
+// Rachunki: definicje rachunków i pozycje miesięczne
+router.get('/bills/:monthId/items', async (req, res) => {
+  const { monthId } = req.params;
+  const pool = require('../db/pool');
+  if (!/^\d{4}-\d{2}$/.test(monthId)) return res.status(400).json({ message: 'Nieprawidłowy format monthId' });
+  const client = await pool.connect();
+  try {
+    const oneOff = await client.query('SELECT id, name, recipient, amount FROM monthly_bills WHERE month_id = $1 ORDER BY id', [monthId]);
+    // Aktywne stałe rachunki, które obejmują ten miesiąc
+    const rec = await client.query(`
+      SELECT id, name, recipient, amount FROM recurring_bills 
+      WHERE is_active = TRUE AND start_month_id <= $1 AND (end_month_id IS NULL OR end_month_id >= $1)
+      ORDER BY id
+    `, [monthId]);
+    res.json({ monthId, recurring: rec.rows, oneOff: oneOff.rows });
+  } catch (e) { res.status(500).json({ message: 'Błąd pobierania rachunków', error: e.message }); } finally { client.release(); }
+});
+
+router.post('/bills/:monthId/items', async (req, res) => {
+  const { monthId } = req.params;
+  const { name, recipient, amount, isRecurring } = req.body || {};
+  const pool = require('../db/pool');
+  if (!/^\d{4}-\d{2}$/.test(monthId)) return res.status(400).json({ message: 'Nieprawidłowy format monthId' });
+  if (!name || amount == null) return res.status(400).json({ message: 'Brak nazwy lub kwoty' });
+  const val = Number(amount);
+  if (!isFinite(val) || val < 0) return res.status(400).json({ message: 'Nieprawidłowa kwota' });
+  const client = await pool.connect();
+  try {
+    if (isRecurring) {
+      const ins = await client.query(
+        `INSERT INTO recurring_bills (name, recipient, amount, start_month_id, is_active)
+         VALUES ($1, $2, $3, $4, TRUE)
+         RETURNING id, name, recipient, amount`,
+        [name, recipient || null, val, monthId]
+      );
+      res.status(201).json({ recurring: ins.rows[0] });
+    } else {
+      const ins = await client.query(
+        `INSERT INTO monthly_bills (month_id, name, recipient, amount)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, name, recipient, amount`,
+        [monthId, name, recipient || null, val]
+      );
+      res.status(201).json({ oneOff: ins.rows[0] });
+    }
+  } catch (e) { res.status(500).json({ message: 'Błąd zapisu rachunku', error: e.message }); } finally { client.release(); }
+});
 
 /**
  * GET /api/accounts - pobieranie wszystkich kont

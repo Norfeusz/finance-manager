@@ -133,6 +133,27 @@ h1, h2, h3 {
     position: sticky;
     top: 20px;
 }
+
+/* Szybkie akcje w lewej kolumnie */
+.quick-actions {
+    margin-top: 16px;
+}
+.quick-actions .qa-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #333;
+}
+.quick-actions .qa-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.btn-sm {
+    width: auto;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    margin-top: 0;
+}
 .form-group {
     display: flex;
     flex-direction: column;
