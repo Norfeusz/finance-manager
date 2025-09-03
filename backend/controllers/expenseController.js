@@ -1,8 +1,157 @@
 // Usunięto nieużywany import Google Sheets
-const { CATEGORY_CONFIG, addNewCategory } = require('../config/categoryConfig');
 const path = require('path');
 const pool = require('../db/pool');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
+// Funkcja do aktualizacji statystyk
+async function updateStatistics(client, monthId, categoryId, subcategoryId, amount) {
+  try {
+    console.log(`Aktualizuję statystyki: month_id=${monthId}, category_id=${categoryId}, subcategory_id=${subcategoryId}, amount=${amount}`);
+    
+    // Pobierz nazwy kategorii i podkategorii
+    let categoryName = null;
+    let subcategoryName = null;
+    
+    if (categoryId) {
+      const categoryRes = await client.query('SELECT name FROM categories WHERE id = $1', [categoryId]);
+      if (categoryRes.rows.length > 0) {
+        categoryName = categoryRes.rows[0].name;
+      }
+    }
+    
+    if (subcategoryId) {
+      const subcategoryRes = await client.query('SELECT name FROM subcategories WHERE id = $1', [subcategoryId]);
+      if (subcategoryRes.rows.length > 0) {
+        subcategoryName = subcategoryRes.rows[0].name;
+      }
+    }
+    
+    console.log(`Mapowanie: categoryName='${categoryName}', subcategoryName='${subcategoryName}'`);
+    
+    // Określ czy to główna kategoria czy podkategoria
+    let statCategory, statSubcategory;
+    
+    if (subcategoryName) {
+      // To jest podkategoria - sprawdź czy to "zakupy codzienne"
+      if (categoryName && categoryName.toLowerCase() === 'zakupy codzienne') {
+        statCategory = 'ZC'; // Używamy "ZC" dla podkategorii zakupów codziennych
+        statSubcategory = subcategoryName;
+      } else {
+        // Inne podkategorie - używamy nazwy głównej kategorii
+        statCategory = categoryName;
+        statSubcategory = subcategoryName;
+      }
+    } else {
+      // To jest główna kategoria
+      statCategory = categoryName;
+      statSubcategory = null;
+    }
+    
+    console.log(`Szukam/aktualizuję rekord: category='${statCategory}', subcategory='${statSubcategory}', month_id='${monthId}'`);
+    
+    // Sprawdź czy rekord już istnieje
+    const existingRecord = await client.query(`
+      SELECT id, amount FROM statistics 
+      WHERE month_id = $1 AND category = $2 AND 
+            (subcategory = $3 OR (subcategory IS NULL AND $3 IS NULL))
+    `, [monthId, statCategory, statSubcategory]);
+    
+    if (existingRecord.rows.length > 0) {
+      // Aktualizuj istniejący rekord
+      const currentAmount = parseFloat(existingRecord.rows[0].amount);
+      const newAmount = currentAmount + amount;
+      
+      await client.query(`
+        UPDATE statistics 
+        SET amount = $1, last_edited = NOW() 
+        WHERE id = $2
+      `, [newAmount, existingRecord.rows[0].id]);
+      
+      console.log(`Zaktualizowano statystyki: ${currentAmount} + ${amount} = ${newAmount}`);
+    } else {
+      // Utwórz nowy rekord
+      await client.query(`
+        INSERT INTO statistics (month_id, category, subcategory, amount, last_edited, is_open)
+        VALUES ($1, $2, $3, $4, NOW(), true)
+      `, [monthId, statCategory, statSubcategory, amount]);
+      
+      console.log(`Utworzono nowy rekord statystyk z kwotą ${amount}`);
+    }
+    
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji statystyk:', error);
+    // Nie przerywamy transakcji - statystyki są pomocnicze
+  }
+}
+
+// Funkcja do aktualizacji statystyk przy usuwaniu wydatku
+async function updateStatisticsOnDelete(client, monthId, categoryId, subcategoryId, amount) {
+  try {
+    console.log(`Aktualizuję statystyki (usuwanie): month_id=${monthId}, category_id=${categoryId}, subcategory_id=${subcategoryId}, amount=${amount}`);
+    
+    // Pobierz nazwy kategorii i podkategorii (analogicznie jak przy dodawaniu)
+    let categoryName = null;
+    let subcategoryName = null;
+    
+    if (categoryId) {
+      const categoryRes = await client.query('SELECT name FROM categories WHERE id = $1', [categoryId]);
+      if (categoryRes.rows.length > 0) {
+        categoryName = categoryRes.rows[0].name;
+      }
+    }
+    
+    if (subcategoryId) {
+      const subcategoryRes = await client.query('SELECT name FROM subcategories WHERE id = $1', [subcategoryId]);
+      if (subcategoryRes.rows.length > 0) {
+        subcategoryName = subcategoryRes.rows[0].name;
+      }
+    }
+    
+    // Określ kategorie/podkategorie w statystykach (analogicznie jak przy dodawaniu)
+    let statCategory, statSubcategory;
+    
+    if (subcategoryName) {
+      if (categoryName && categoryName.toLowerCase() === 'zakupy codzienne') {
+        statCategory = 'ZC';
+        statSubcategory = subcategoryName;
+      } else {
+        statCategory = categoryName;
+        statSubcategory = subcategoryName;
+      }
+    } else {
+      statCategory = categoryName;
+      statSubcategory = null;
+    }
+    
+    console.log(`Odejmuję z statystyk: category='${statCategory}', subcategory='${statSubcategory}', amount=${amount}`);
+    
+    // Znajdź i zaktualizuj istniejący rekord
+    const existingRecord = await client.query(`
+      SELECT id, amount FROM statistics 
+      WHERE month_id = $1 AND category = $2 AND 
+            (subcategory = $3 OR (subcategory IS NULL AND $3 IS NULL))
+    `, [monthId, statCategory, statSubcategory]);
+    
+    if (existingRecord.rows.length > 0) {
+      const currentAmount = parseFloat(existingRecord.rows[0].amount);
+      const newAmount = currentAmount - amount;
+      
+      await client.query(`
+        UPDATE statistics 
+        SET amount = $1, last_edited = NOW() 
+        WHERE id = $2
+      `, [newAmount, existingRecord.rows[0].id]);
+      
+      console.log(`Zaktualizowano statystyki (usuwanie): ${currentAmount} - ${amount} = ${newAmount}`);
+    } else {
+      console.log(`UWAGA: Nie znaleziono rekordu statystyk do aktualizacji dla category='${statCategory}', subcategory='${statSubcategory}', month_id='${monthId}'`);
+    }
+    
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji statystyk (usuwanie):', error);
+    // Nie przerywamy transakcji
+  }
+}
 
 const addTransaction = async (req, res) => {
   try {
@@ -192,8 +341,7 @@ const addTransaction = async (req, res) => {
               // Jeśli to jest nowa kategoria od użytkownika, zaktualizujmy konfigurację kategorii
               if (data.isNewCategory) {
                 console.log(`Dodano nową kategorię: ${mainCategory}`);
-                // Dodaj nową kategorię do konfiguracji
-                addNewCategory(mainCategory);
+                // Nowa kategoria została już dodana do bazy danych powyżej
               }
             } else {
               categoryId = categoryRes.rows[0].id;
@@ -259,6 +407,10 @@ const addTransaction = async (req, res) => {
                 'UPDATE transactions SET balance_after = $1 WHERE id = $2',
                 [newBalance, transactionId]
               );
+              
+              // **NOWA FUNKCJONALNOŚĆ: Aktualizuj statystyki**
+              await updateStatistics(client, monthId, categoryId, subcategoryId, parseFloat(data.cost));
+              
             } else {
               console.log("To JEST wydatek KWNR, będzie przetworzony w specjalnej sekcji");
             }
@@ -1040,6 +1192,12 @@ const deleteTransaction = async (req, res) => {
                 }
             }
             
+            // **NOWA FUNKCJONALNOŚĆ: Aktualizuj statystyki przy usuwaniu wydatku**
+            if (transaction.type === 'expense') {
+                console.log(`Aktualizuję statystyki przed usunięciem wydatku ID: ${id}`);
+                await updateStatisticsOnDelete(client, transaction.month_id, transaction.category_id, transaction.subcategory_id, amount);
+            }
+            
             // Usuń transakcję główną na końcu
             console.log(`Próbuję usunąć główną transakcję o ID: ${id}`);
             
@@ -1111,7 +1269,7 @@ const updateTransaction = async (req, res) => {
             
             // Pobierz aktualną transakcję z bazy wraz z nazwą konta
       const transactionResult = await client.query(
-        `SELECT t.id, t.type, t.amount, t.account_id, t.description, t.date, t.month_id, a.name as account_name 
+        `SELECT t.id, t.type, t.amount, t.account_id, t.description, t.date, t.month_id, t.category_id, t.subcategory_id, a.name as account_name 
          FROM transactions t
          JOIN accounts a ON t.account_id = a.id
          WHERE t.id = $1`,
@@ -1186,6 +1344,17 @@ const updateTransaction = async (req, res) => {
                 `, [updatedAmount, updatedAccountId]);
                 
                 console.log(`Zaktualizowano saldo konta ${updatedAccountName}, odjęto kwotę ${updatedAmount}`);
+                
+                // **NOWA FUNKCJONALNOŚĆ: Aktualizuj statystyki przy edycji wydatku**
+                if (transaction.category_id || transaction.subcategory_id) {
+                    console.log(`Aktualizuję statystyki dla edycji wydatku: stara kwota=${originalAmount}, nowa kwota=${updatedAmount}`);
+                    
+                    // Odejmij starą kwotę ze statystyk
+                    await updateStatisticsOnDelete(client, transaction.month_id, transaction.category_id, transaction.subcategory_id, originalAmount);
+                    
+                    // Dodaj nową kwotę do statystyk  
+                    await updateStatistics(client, transaction.month_id, transaction.category_id, transaction.subcategory_id, updatedAmount);
+                }
                 
                 // Obsługa specjalnej logiki dla kont Gabi/Norf
                 

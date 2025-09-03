@@ -510,7 +510,9 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
         transactions.forEach(transaction => {
             console.log('Przetwarzam transakcję:', JSON.stringify(transaction, null, 2)); // Dokładny log transakcji
             const isSettlement = transaction.type === 'expense' && transaction.description && transaction.description.startsWith('Rozliczenie:');
-            if ((transaction.type === 'expense' || transaction.category === 'Wydatek KWNR') && !isSettlement) {
+            const isTransferToKwnr = transaction.description === 'Transfer na KWNR' || transaction.category === 'Transfer na KWNR';
+            
+            if ((transaction.type === 'expense' || transaction.category === 'Wydatek KWNR') && !isSettlement && !isTransferToKwnr) {
                 // Tworzymy obiekt wydatku bezpośrednio na podstawie danych z transakcji
                 // Ważne jest, aby wszystkie pola były dokładnie takie, jakie otrzymujemy z backendu
                 const expenseObj = {
@@ -539,7 +541,12 @@ function KwnrAccountView({ transactions: initialTransactions, currentBalance: in
                 
                 console.log('Dodaję wydatek do listy:', JSON.stringify(expenseObj, null, 2));
                 expensesList.push(expenseObj);
-            } else if (isSettlement || transaction.type === 'transfer' || transaction.type === 'income') {
+            } else if (isSettlement || transaction.type === 'transfer' || transaction.type === 'income' || (isTransferToKwnr && transaction.type === 'income')) {
+                // Dla transferów na KWNR pokazuj tylko transakcję income (wpływ), nie expense (transfer z konta źródłowego)
+                if (isTransferToKwnr && transaction.type === 'expense') {
+                    return; // Pomijamy transakcję expense "Transfer na KWNR"
+                }
+                
                 // Wyodrębnij nazwę źródłowego konta dla wpływu
                 let source = 'Nieznane';
                 let destination = transaction.destination;

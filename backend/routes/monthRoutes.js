@@ -134,6 +134,54 @@ router.post('/', async (req, res) => {
           }
         }
       } catch (se) { console.warn('Seed opening for Rachunki pominięty:', se.message); }
+      
+      // Inicjalizacja statystyk dla nowego miesiąca
+      try {
+        // Pobierz wszystkie kategorie wydatków
+        const categories = await client.query(`
+          SELECT id, name FROM categories 
+          WHERE name NOT IN ('Wpływy') 
+          ORDER BY name
+        `);
+        
+        // Pobierz podkategorie dla "zakupy codzienne" 
+        const shoppingCategoryId = await client.query(`
+          SELECT id FROM categories WHERE LOWER(name) = 'zakupy codzienne'
+        `);
+        
+        let subcategories = [];
+        if (shoppingCategoryId.rows.length > 0) {
+          const subcatResult = await client.query(`
+            SELECT id, name FROM subcategories 
+            WHERE category_id = $1 
+            ORDER BY name
+          `, [shoppingCategoryId.rows[0].id]);
+          subcategories = subcatResult.rows;
+        }
+        
+        // Wstaw rekordy dla kategorii głównych
+        for (const category of categories.rows) {
+          await client.query(`
+            INSERT INTO statistics (month_id, category, subcategory, amount, last_edited, is_open)
+            VALUES ($1, $2, NULL, 0, NOW(), true)
+            ON CONFLICT DO NOTHING
+          `, [monthId, category.name]);
+        }
+        
+        // Wstaw rekordy dla podkategorii zakupów codziennych
+        for (const subcategory of subcategories) {
+          await client.query(`
+            INSERT INTO statistics (month_id, category, subcategory, amount, last_edited, is_open)
+            VALUES ($1, $2, $3, 0, NOW(), true)
+            ON CONFLICT DO NOTHING
+          `, [monthId, 'zakupy codzienne', subcategory.name]);
+        }
+        
+        console.log(`Zainicjalizowano ${categories.rows.length} kategorii i ${subcategories.length} podkategorii dla miesiąca ${monthId}`);
+      } catch (se) { 
+        console.warn('Inicjalizacja statystyk pominięta:', se.message); 
+      }
+      
       res.status(201).json({ created: true, month: insertResult.rows[0] });
     } finally { client.release(); }
   } catch (error) {
@@ -187,13 +235,72 @@ router.post('/ensure', async (req, res) => {
             }
           }
         } catch (se) { console.warn('Seed opening for Rachunki (ensure) pominięty:', se.message); }
+        
+        // Inicjalizacja statystyk dla nowego miesiąca w ensure
+        try {
+          // Pobierz wszystkie kategorie wydatków
+          const categories = await client.query(`
+            SELECT id, name FROM categories 
+            WHERE name NOT IN ('Wpływy') 
+            ORDER BY name
+          `);
+          
+          // Pobierz podkategorie dla "zakupy codzienne" 
+          const shoppingCategoryId = await client.query(`
+            SELECT id FROM categories WHERE LOWER(name) = 'zakupy codzienne'
+          `);
+          
+          let subcategories = [];
+          if (shoppingCategoryId.rows.length > 0) {
+            const subcatResult = await client.query(`
+              SELECT id, name FROM subcategories 
+              WHERE category_id = $1 
+              ORDER BY name
+            `, [shoppingCategoryId.rows[0].id]);
+            subcategories = subcatResult.rows;
+          }
+          
+          // Wstaw rekordy dla kategorii głównych
+          for (const category of categories.rows) {
+            await client.query(`
+              INSERT INTO statistics (month_id, category, subcategory, amount, last_edited, is_open)
+              VALUES ($1, $2, NULL, 0, NOW(), true)
+              ON CONFLICT DO NOTHING
+            `, [month_id, category.name]);
+          }
+          
+          // Wstaw rekordy dla podkategorii zakupów codziennych
+          for (const subcategory of subcategories) {
+            await client.query(`
+              INSERT INTO statistics (month_id, category, subcategory, amount, last_edited, is_open)
+              VALUES ($1, $2, $3, 0, NOW(), true)
+              ON CONFLICT DO NOTHING
+            `, [month_id, 'zakupy codzienne', subcategory.name]);
+          }
+          
+          console.log(`Zainicjalizowano ${categories.rows.length} kategorii i ${subcategories.length} podkategorii dla miesiąca ${month_id} (ensure)`);
+        } catch (statErr) {
+          console.warn('Inicjalizacja statystyk w ensure pominięta:', statErr.message);
+        }
+        
         return res.status(201).json({ created: true, month: inserted.rows[0] });
       }
       const monthRow = existing.rows[0];
       if (monthRow.is_closed) {
         if (!allowReopen) return res.status(202).json({ needsConfirmation: true, action: 'reopen', month_id });
-        const reopened = await client.query('UPDATE months SET is_closed = false WHERE id = $1 RETURNING *', [month_id]);
-        return res.status(200).json({ reopened: true, month: reopened.rows[0] });
+        
+        await client.query('BEGIN');
+        try {
+          const reopened = await client.query('UPDATE months SET is_closed = false WHERE id = $1 RETURNING *', [month_id]);
+          // Zaktualizuj status is_open w tabeli statistics na true dla otwieranego miesiąca
+          await client.query('UPDATE statistics SET is_open = true WHERE month_id = $1', [month_id]);
+          console.log(`Otwarto statystyki dla miesiąca ${month_id} (is_open = true) przez ensure`);
+          await client.query('COMMIT');
+          return res.status(200).json({ reopened: true, month: reopened.rows[0] });
+        } catch (e) {
+          await client.query('ROLLBACK');
+          throw e;
+        }
       }
       return res.status(200).json({ ok: true, month: monthRow });
     } finally { client.release(); }
@@ -231,6 +338,10 @@ router.post('/:id/close', async (req, res) => {
         return res.status(404).json({ message: 'Nie znaleziono miesiąca' });
       }
 
+      // Zaktualizuj status is_open w tabeli statistics na false dla zamykanego miesiąca
+      await client.query('UPDATE statistics SET is_open = false WHERE month_id = $1', [id]);
+      console.log(`Zamknięto statystyki dla miesiąca ${id} (is_open = false)`);
+
       // Wylicz następny miesiąc (YYYY-MM)
       const [yStr, mStr] = id.split('-');
       const y = parseInt(yStr, 10);
@@ -267,9 +378,34 @@ router.post('/:id/close', async (req, res) => {
 router.post('/:id/reopen', async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query('UPDATE months SET is_closed = false WHERE id = $1 RETURNING *', [id]);
-    if (!r.rows.length) return res.status(404).json({ message: 'Nie znaleziono miesiąca' });
-    res.json({ reopened: true, month: r.rows[0] });
+    console.log(`=== ROZPOCZĘCIE OTWIERANIA MIESIĄCA ${id} ===`);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      console.log(`Rozpoczęto transakcję dla ${id}`);
+      
+      const r = await client.query('UPDATE months SET is_closed = false WHERE id = $1 RETURNING *', [id]);
+      if (!r.rows.length) {
+        console.log(`Nie znaleziono miesiąca ${id}`);
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'Nie znaleziono miesiąca' });
+      }
+      console.log(`Zaktualizowano miesiąc ${id} na is_closed = false`);
+
+      // Zaktualizuj status is_open w tabeli statistics na true dla otwieranego miesiąca
+      const updateResult = await client.query('UPDATE statistics SET is_open = true WHERE month_id = $1', [id]);
+      console.log(`Otwarto statystyki dla miesiąca ${id} (is_open = true), zaktualizowano ${updateResult.rowCount} rekordów`);
+
+      await client.query('COMMIT');
+      console.log(`Zacommitowano transakcję dla ${id}`);
+      res.json({ reopened: true, month: r.rows[0] });
+    } catch (e) {
+      console.log(`Błąd podczas otwierania miesiąca ${id}:`, e);
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   } catch (e) { res.status(500).json({ message: 'Błąd serwera', error: e.message }); }
 });
 

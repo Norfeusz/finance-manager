@@ -13,7 +13,6 @@ const accountRoutes = require('./routes/accountRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const monthRoutes = require('./routes/monthRoutes');
 const pool = require('./db/pool'); // Import połączenia z bazą danych
-const { initializeDatabase } = require('./scripts/initializeDb');
 const { createTables } = require('./scripts/createTables');
 
 // Inicjalizacja aplikacji Express
@@ -35,10 +34,15 @@ app.use('/api/months', monthRoutes);
 // Inicjalizacja bazy danych i uruchomienie serwera
 async function startServer() {
   try {
-    // 1. Utwórz tabele w bazie danych jeśli nie istnieją
-    await createTables();
-    // 2. Inicjalizuj podstawowe dane
-    await initializeDatabase();
+    const skipInit = process.argv.includes('--skip-init');
+    
+    if (!skipInit) {
+      // 1. Utwórz tabele w bazie danych jeśli nie istnieją
+      await createTables();
+      // 2. Podstawowe dane już istnieją w bazie
+      console.log('Inicjalizacja bazy danych pominięta (--skip-init)');
+    }
+    
     // 3. Uruchom serwer
     app.listen(port, () => {
       console.log(`🚀 Serwer nasłuchuje na porcie ${port}`);

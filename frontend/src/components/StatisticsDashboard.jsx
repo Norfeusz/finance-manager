@@ -14,6 +14,7 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
   const [editTransferModal, setEditTransferModal] = useState({ isOpen: false, transaction: null });
   const [accountBalances, setAccountBalances] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(null);
+  const [categoryAverages, setCategoryAverages] = useState({});
   // SC (saldo całkowite) z KWNR – synchronizowane przez sessionStorage + event z KwnrAccountView
   const [kwnrSC, setKwnrSC] = useState(() => {
     try {
@@ -65,6 +66,24 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
         } else {
           throw new Error(`HTTP error ${monthResponse.status}`);
         }
+        
+        // Pobierz średnie kategorii dla bieżącego miesiąca
+        if (selectedMonthId) {
+          try {
+            const averagesResponse = await fetch(`http://localhost:3001/api/statistics/shopping/averages?month_id=${selectedMonthId}`);
+            if (averagesResponse.ok) {
+              const averagesData = await averagesResponse.json();
+              setCategoryAverages(averagesData.averages || {});
+            } else {
+              console.warn('Nie udało się pobrać średnich kategorii');
+              setCategoryAverages({});
+            }
+          } catch (avgErr) {
+            console.warn('Błąd pobierania średnich:', avgErr);
+            setCategoryAverages({});
+          }
+        }
+        
   // budżet wyświetlany pochodzi teraz z transakcji (suma wpływów początkowych)
       } catch (err) {
         console.error('Błąd pobierania danych:', err);
@@ -98,7 +117,7 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
       window.removeEventListener('last-expense-updated', onLastExpense);
       window.removeEventListener('storage', onLastExpense);
     };
-  }, []);
+  }, [selectedMonthId]);
 
   // Pomocnicza: czy wydatek jest z panelu KWNR (ma nie wpływać na Bilans miesiąca/budżet)
   const isKwnrExpenseTx = (t) => t.type === 'expense' && (
@@ -697,16 +716,51 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
             </CollapsibleSection>
             
             <CollapsibleSection title={<div className="section-title"><span>Suma wydatków:</span><span className="section-amount">{formatCurrency(stats.totalExpenses)}</span></div>}>
-              <ul className="category-list">
+              <div className="expense-stats-table">
+                <div className="expense-stats-header">
+                  <span>Kategoria</span>
+                  <span>Kwota</span>
+                  <span>Średnio / msc</span>
+                </div>
                 {Object.entries(stats.expenseByCategory)
                   .sort((a, b) => b[1] - a[1])
-                  .map(([category, amount]) => (
-                    <li key={category} onClick={() => handleCategoryClick(category)} className="category-item">
-                      <strong>{category}</strong>
-                      <span className="category-amount">{formatCurrency(amount)}</span>
-                    </li>
-                  ))}
-              </ul>
+                  .map(([category, amount]) => {
+                    // Mapowanie nazw kategorii do kluczy w średnich
+                    const getCategoryKey = (cat) => {
+                      const mapping = {
+                        'zakupy codzienne': 'zakupy codzienne',
+                        'auta': 'auta',
+                        'dom': 'dom',
+                        'wyjścia i szama do domu': 'wyjścia i szama do domu',
+                        'pies': 'pies',
+                        'prezenty': 'prezenty',
+                        'rachunki': 'rachunki',
+                        'subkonta': 'subkonta',
+                        // Podkategorie (ZC)
+                        'jedzenie': 'jedzenie',
+                        'słodycze': 'słodycze',
+                        'alkohol': 'alkohol',
+                        'higiena': 'higiena',
+                        'apteka': 'apteka',
+                        'chemia': 'chemia',
+                        'zakupy': 'zakupy',
+                        'kwiatki': 'kwiatki'
+                      };
+                      return mapping[cat.toLowerCase()] || cat.toLowerCase();
+                    };
+                    
+                    const categoryKey = getCategoryKey(category);
+                    const average = categoryAverages[categoryKey] || 0;
+                    
+                    return (
+                      <div key={category} onClick={() => handleCategoryClick(category)} className="expense-stats-row">
+                        <span className="category-name">{category}</span>
+                        <span className="category-amount">{formatCurrency(amount)}</span>
+                        <span className="category-average">{average > 0 ? formatCurrency(average) : '-'}</span>
+                      </div>
+                    );
+                  })}
+              </div>
             </CollapsibleSection>
             <CollapsibleSection title={<div className="section-title"><span>Transfery między kontami:</span><span className="section-amount">{formatCurrency(stats.totalTransfers)}</span></div>}>
               <ul className="transfers-list">
