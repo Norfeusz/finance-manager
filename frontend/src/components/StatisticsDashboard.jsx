@@ -501,7 +501,33 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
   }
 
   const handleCategoryClick = (categoryName) => {
-    const categoryTransactions = transactions.filter(t => t.category === categoryName);
+    let categoryTransactions = transactions.filter(t => t.category === categoryName);
+    
+    // Dla zakupów codziennych - oblicz całkowitą kwotę dla każdej daty
+    if (categoryName === 'zakupy codzienne') {
+      // Grupuj transakcje według daty
+      const transactionsByDate = categoryTransactions.reduce((acc, t) => {
+        const dateKey = t.date || 'unknown';
+        if (!acc[dateKey]) {
+          acc[dateKey] = [];
+        }
+        acc[dateKey].push(t);
+        return acc;
+      }, {});
+      
+      // Dodaj totalAmount do każdej transakcji
+      categoryTransactions = categoryTransactions.map(t => {
+        const dateKey = t.date || 'unknown';
+        const transactionsOnSameDate = transactionsByDate[dateKey] || [];
+        const totalAmount = transactionsOnSameDate.reduce((sum, tx) => sum + (parseFloat(tx.cost) || 0), 0);
+        
+        return {
+          ...t,
+          totalAmount: totalAmount
+        };
+      });
+    }
+    
     setModalInfo({
         isOpen: true,
         category: categoryName,
@@ -723,6 +749,11 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
                   <span>Średnio / msc</span>
                 </div>
                 {Object.entries(stats.expenseByCategory)
+                  .filter(([category]) => {
+                    // Ukryj niechciane kategorie
+                    const hiddenCategories = ['wyrównania', 'Wydatek KWNR'];
+                    return !hiddenCategories.includes(category);
+                  })
                   .sort((a, b) => b[1] - a[1])
                   .map(([category, amount]) => {
                     // Mapowanie nazw kategorii do kluczy w średnich
@@ -749,12 +780,38 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
                       return mapping[cat.toLowerCase()] || cat.toLowerCase();
                     };
                     
+                    // Mapowanie nazw kategorii do wyświetlania
+                    const getCategoryDisplayName = (cat) => {
+                      const displayMapping = {
+                        'zakupy codzienne': 'Zakupy codzienne',
+                        'auta': 'Auta',
+                        'dom': 'Dom',
+                        'wyjścia i szama do domu': 'Wyjścia i szama do domu',
+                        'pies': 'Pies',
+                        'prezenty': 'Prezenty',
+                        'wyjazdy': 'Wyjazdy',
+                        'rachunki': 'Rachunki',
+                        'subkonta': 'Subkonta',
+                        // Podkategorie (ZC)
+                        'jedzenie': 'Jedzenie',
+                        'słodycze': 'Słodycze',
+                        'alkohol': 'Alkohol',
+                        'higiena': 'Higiena',
+                        'apteka': 'Apteka',
+                        'chemia': 'Chemia',
+                        'zakupy': 'Zakupy',
+                        'kwiatki': 'Kwiatki'
+                      };
+                      return displayMapping[cat] || cat;
+                    };
+                    
                     const categoryKey = getCategoryKey(category);
                     const average = categoryAverages[categoryKey] || 0;
+                    const displayName = getCategoryDisplayName(category);
                     
                     return (
                       <div key={category} onClick={() => handleCategoryClick(category)} className="expense-stats-row">
-                        <span className="category-name">{category}</span>
+                        <span className="category-name">{displayName}</span>
                         <span className="category-amount">{formatCurrency(amount)}</span>
                         <span className="category-average">{average > 0 ? formatCurrency(average) : '-'}</span>
                       </div>

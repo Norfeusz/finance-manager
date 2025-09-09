@@ -245,4 +245,119 @@ const getCategoryAverages = async (req, res) => {
     }
 };
 
-module.exports = { getShoppingStats, getCategoryAverages };
+
+// Funkcja do czyszczenia cache średnich (do użycia gdy zmieniają się statusy miesięcy)
+const clearAveragesCache = () => {
+	averagesCache.data = null
+	averagesCache.timestamp = null
+	averagesCache.closedMonthsHash = null
+	console.log('Cache średnich został wyczyszczony')
+}
+
+// Średnie kategorii z 3 ostatnich miesięcy dla których istnieją dane dla danej kategorii
+const getCategoryAveragesLast3Months = async (req, res) => {
+	try {
+		const monthId = (req.query.month_id || '').toString()
+		if (!/^\d{4}-\d{2}$/.test(monthId))
+			return res.status(400).json({ message: 'Parametr month_id w formacie YYYY-MM wymagany' })
+
+		const client = await pool.connect()
+		try {
+			console.log(`=== getCategoryAveragesLast3Months START ===`)
+			console.log(`Obliczanie średnich z 3 ostatnich miesięcy dla: ${monthId}`)
+
+			// Pobierz wszystkie dostępne miesiące z zamkniętymi statystykami
+			const availableMonthsQuery = `
+				SELECT DISTINCT month_id 
+				FROM statistics 
+				WHERE is_open = false 
+				ORDER BY month_id DESC
+			`
+			const availableMonthsResult = await client.query(availableMonthsQuery)
+			const availableMonths = availableMonthsResult.rows.map(row => row.month_id)
+
+			console.log(`Dostępne zamknięte miesiące: [${availableMonths.join(', ')}]`)
+
+			// Pobierz wszystkie dane
+			const statisticsQuery = `
+				SELECT month_id, category, subcategory, amount 
+				FROM statistics 
+				WHERE is_open = false
+				ORDER BY month_id DESC, category, subcategory
+			`
+			const statsRows = await client.query(statisticsQuery)
+			console.log(`Znaleziono ${statsRows.rows.length} rekordów statystyk`)
+
+			// Grupuj dane według kategorii
+			const categoryMonthlyData = new Map()
+
+			statsRows.rows.forEach(row => {
+				const category = row.category
+				const subcategory = row.subcategory
+				const amount = parseFloat(row.amount) || 0
+				const monthId = row.month_id
+
+				let mainKey = category
+
+				// Dla podkategorii
+				if (subcategory) {
+					const subKey = subcategory
+					if (!categoryMonthlyData.has(subKey)) {
+						categoryMonthlyData.set(subKey, [])
+					}
+					categoryMonthlyData.get(subKey).push({ month_id: monthId, amount })
+				}
+
+				// Główna kategoria
+				if (!categoryMonthlyData.has(mainKey)) {
+					categoryMonthlyData.set(mainKey, [])
+				}
+				categoryMonthlyData.get(mainKey).push({ month_id: monthId, amount })
+			})
+
+			// Oblicz średnie z 3 ostatnich miesięcy
+			const averages = {}
+			
+			for (const [categoryKey, monthlyData] of categoryMonthlyData.entries()) {
+				const sortedData = monthlyData
+					.filter(item => item.amount > 0)
+					.sort((a, b) => b.month_id.localeCompare(a.month_id))
+
+				if (sortedData.length === 0) continue
+
+				const last3MonthsData = sortedData.slice(0, 3)
+				
+				if (last3MonthsData.length > 0) {
+					const sum = last3MonthsData.reduce((acc, item) => acc + item.amount, 0)
+					const average = sum / last3MonthsData.length
+					
+					averages[categoryKey] = {
+						average: +(average).toFixed(2),
+						monthsUsed: last3MonthsData.length,
+						monthsIncluded: last3MonthsData.map(item => item.month_id),
+						amounts: last3MonthsData.map(item => ({ month: item.month_id, amount: item.amount }))
+					}
+				}
+			}
+
+			console.log(`Obliczone średnie z ostatnich 3 miesięcy dla ${Object.keys(averages).length} kategorii`)
+
+			res.json({ 
+				month_id: monthId, 
+				averages,
+				metadata: {
+					totalCategories: Object.keys(averages).length,
+					availableMonths: availableMonths.length,
+					calculationMethod: 'last_3_months_with_data'
+				}
+			})
+		} finally {
+			client.release()
+		}
+	} catch (e) {
+		console.error('Błąd liczenia średnich z 3 ostatnich miesięcy:', e)
+		res.status(500).json({ message: 'Błąd serwera', error: e.message })
+	}
+}
+
+module.exports = { getShoppingStats, getCategoryAverages, clearAveragesCache, getCategoryAveragesLast3Months };

@@ -6,7 +6,7 @@ const formatCurrency = (amount) => (amount || 0).toFixed(2).replace('.', ',') + 
 
 // Domyślne podkategorie dla zakupów codziennych
 const defaultSubCategories = ['jedzenie', 'słodycze', 'chemia', 'apteka', 'alkohol', 'higiena', 'kwiatki', 'zakupy'];
-const defaultMainCategories = ['auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty'];
+const defaultMainCategories = ['auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty', 'wyjazdy'];
 
 
 // Funkcja która inicjalizuje mapę nazw kategorii
@@ -14,8 +14,8 @@ const initCategoryDisplayNames = () => {
     return {
         'jedzenie': 'Jedzenie', 'słodycze': 'Słodycze', 'chemia': 'Chemia', 'apteka': 'Apteka',
         'alkohol': 'Alkohol', 'higiena': 'Higiena', 'kwiatki': 'Kwiatki', 'zakupy': 'Inne zakupy',
-        'auta': 'Auta', 'dom': 'Dom', 'wyjścia i szama do domu': 'Wyjścia / Jedzenie na mieście',
-        'pies': 'Pies', 'prezenty': 'Prezenty', 'zakupy codzienne': 'Zakupy codzienne (suma)'
+        'auta': 'Auta', 'dom': 'Dom', 'wyjścia i szama do domu': 'Wyjścia i szama do domu',
+        'pies': 'Pies', 'prezenty': 'Prezenty', 'wyjazdy': 'Wyjazdy', 'zakupy codzienne': 'Zakupy codzienne (suma)'
     };
 };
 
@@ -541,7 +541,9 @@ function ShoppingStats({ refreshKey, transactions, onDataChange, selectedMonthId
                     <tbody>
                         <tr className="main-category-header"><td colSpan="4">Zakupy codzienne</td></tr>
                         {renderRow('zakupy codzienne')}
-                        {subCategories.map(renderRow)}
+                        {subCategories
+                            .filter(subcategory => subcategory !== 'zakupy') // Ukryj podkategorię "inne zakupy"
+                            .map(renderRow)}
                         <tr className="main-category-header"><td colSpan="4">Pozostałe kategorie</td></tr>
                         {mainCategories.filter(c => !isExcludedStatsCategory(c)).map(renderRow)}
                     </tbody>

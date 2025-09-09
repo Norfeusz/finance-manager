@@ -19,7 +19,7 @@ const ExpenseFields = ({ onBreakdownChange, mainCategory, setMainCategory, shopp
     
     // Stałe, zdefiniowane od początku kategorie
     const baseCategories = useMemo(() => [ 
-        'zakupy codzienne', 'auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty'
+        'zakupy codzienne', 'auta', 'dom', 'wyjścia i szama do domu', 'pies', 'prezenty', 'wyjazdy'
     ], []);
     
     // Pobierz nazwy wyświetlania dla kategorii

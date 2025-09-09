@@ -174,7 +174,7 @@ router.post('/', async (req, res) => {
             INSERT INTO statistics (month_id, category, subcategory, amount, last_edited, is_open)
             VALUES ($1, $2, $3, 0, NOW(), true)
             ON CONFLICT DO NOTHING
-          `, [monthId, 'zakupy codzienne', subcategory.name]);
+          `, [monthId, 'ZC', subcategory.name]);
         }
         
         console.log(`Zainicjalizowano ${categories.rows.length} kategorii i ${subcategories.length} podkategorii dla miesiąca ${monthId}`);
@@ -275,7 +275,7 @@ router.post('/ensure', async (req, res) => {
               INSERT INTO statistics (month_id, category, subcategory, amount, last_edited, is_open)
               VALUES ($1, $2, $3, 0, NOW(), true)
               ON CONFLICT DO NOTHING
-            `, [month_id, 'zakupy codzienne', subcategory.name]);
+            `, [month_id, 'ZC', subcategory.name]);
           }
           
           console.log(`Zainicjalizowano ${categories.rows.length} kategorii i ${subcategories.length} podkategorii dla miesiąca ${month_id} (ensure)`);

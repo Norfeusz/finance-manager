@@ -66,3 +66,37 @@
     overflow-x: hidden;
     flex: 1;
 }
+
+/* Style dla listy transakcji w CategoryDetailsModal */
+.transaction-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.transaction-info .description {
+    flex: 1;
+    font-weight: 500;
+}
+
+.transaction-info .cost {
+    font-weight: bold;
+    color: #d32f2f;
+    text-align: right;
+    min-width: 80px;
+}
+
+.transaction-info .total-amount {
+    color: #666;
+    font-weight: normal;
+    font-size: 0.9em;
+}
+
+.transaction-info .transaction-date {
+    color: #666;
+    font-size: 0.9em;
+    min-width: 80px;
+    text-align: right;
+}

@@ -280,27 +280,33 @@ const addTransaction = async (req, res) => {
             const isKwnrExpense = data.isKwnrExpense === true;
             
             // Mapowanie kategorii frontendu na kategorie bazy danych
-            const categoryMapping = {
-              'zakupy codzienne': 'Zakupy spożywcze',
-              'auta': 'Transport',
-              'dom': 'Mieszkanie',
-              'wyjścia i szama do domu': 'Rozrywka',
-              'pies': 'Zwierzęta',
-              'prezenty': 'Prezenty',
-              'Transfer': 'Transfer',  // Kategoria Transfer
-              'Transfer na KWNR': 'Transfer na KWNR',  // Dedykowana kategoria dla transferów na KWNR
-              'Wydatek KWNR': 'Wydatek KWNR'  // Dedykowana kategoria dla wydatków z konta KWNR
+             const categoryMapping = {
+                'zakupy codzienne': 'zakupy codzienne',
+                'auta': 'auta',
+                'dom': 'dom',
+                'wyjścia / jedzenie na mieście': 'wyjścia i szama do domu',
+                'pies': 'pies',
+                'prezenty': 'prezenty',
+                };
+            
+            // Funkcja do konwersji nazwy kategorii z bazy danych na nazwę używaną w fronendzie
+            const mapCategoryName = (dbCategoryName) => {
+                // Jeśli istnieje mapowanie, użyj go
+                if (categoryMapping[dbCategoryName]) {
+                    return categoryMapping[dbCategoryName];
+                }
+                // W przeciwnym razie użyj nazwy z bazy danych, ale z małej litery (frontend używa nazw z małej litery)
+                return dbCategoryName.toLowerCase();
             };
             
-            // Mapowanie podkategorii frontendu na podkategorie bazy danych
+            // Mapowanie nazw podkategorii na nazwy używane w fronendzie
             const subcategoryMapping = {
-              'jedzenie': 'Podstawowe',
-              'słodycze': 'Przekąski',
-              'alkohol': 'Napoje',
-              'chemia': 'Chemia',
-              'higiena': 'Higiena',
-              'apteka': 'Leki',
-              'kwiatki': 'Kwiaty'
+                'jedzenie': 'jedzenie',
+                'słodycze': 'słodycze',
+                'alkohol': 'alkohol',
+                'chemia': 'chemia',
+                'higiena': 'higiena',
+                'apteka': 'apteka'
             };
             
             // Znajdź lub utwórz konto

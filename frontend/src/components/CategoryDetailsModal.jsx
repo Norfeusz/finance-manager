@@ -119,7 +119,16 @@ function CategoryDetailsModal({ isOpen, onClose, categoryName, transactions, onD
                 <div className="transaction-list-item">
                   <div className="transaction-info">
                     <span className="description">{t.description || '(brak opisu)'}</span>
-                    <span className="cost">{formatCurrency(t.cost)}</span>
+                    <span className="cost">
+                      {formatCurrency(t.cost)}
+                      {/* Dla zakupów codziennych - zawsze pokaż całkowitą kwotę w nawiasie */}
+                      {categoryName === 'zakupy codzienne' && t.totalAmount && (
+                        <span className="total-amount"> ({formatCurrency(t.totalAmount)})</span>
+                      )}
+                    </span>
+                    <span className="transaction-date">
+                      {t.date ? new Date(t.date).toLocaleDateString('pl-PL') : '-'}
+                    </span>
                   </div>
                   <div className="transaction-actions">
                     <button title="Pokaż szczegóły" onClick={() => toggleDetails(t.id)}>ℹ️</button>

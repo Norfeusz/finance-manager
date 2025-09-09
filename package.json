@@ -4,9 +4,9 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
-  "test": "echo \"Error: no test specified\" && exit 1",
-  "migrate:monthid": "node backend/scripts/runMonthIdMigration.js",
-  "reset:aug2025": "node backend/scripts/resetAugust2025CommonAndSetup.js"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate:monthid": "node backend/scripts/runMonthIdMigration.js",
+    "reset:aug2025": "node backend/scripts/resetAugust2025CommonAndSetup.js"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +16,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
-
+    "node-fetch": "^3.3.2",
     "pg": "^8.16.3"
   }
 }
