@@ -10,7 +10,8 @@ const {
   getBillsMonthState,
   setBillsOpeningBalance,
   listBillsDeductions,
-  applyBillsDeduction
+  applyBillsDeduction,
+  listAllBillsDeductions
 } = require('../controllers/accountController');
 const { getTransactions } = require('../controllers/transactionController');
 
@@ -49,6 +50,8 @@ router.get('/bills/:monthId', getBillsMonthState);
 router.post('/bills/:monthId/opening', setBillsOpeningBalance);
 router.get('/bills/:monthId/deductions', listBillsDeductions);
 router.post('/bills/:monthId/deduct', applyBillsDeduction);
+// Wszystkie odjęcia dla Rachunki (pełna historia)
+router.get('/bills/deductions/all', listAllBillsDeductions);
 
 // Rachunki: definicje rachunków i pozycje miesięczne
 router.get('/bills/:monthId/items', async (req, res) => {

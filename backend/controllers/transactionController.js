@@ -61,10 +61,52 @@ const getTransactions = async (req, res) => {
                                    OR t.extra_description ILIKE '%KWNR%'`
 					queryParams = [accountId]
 					console.log('[KWNR] whereClause:', whereClause, 'params:', queryParams)
+				} else if (accountName === 'Rachunki') {
+					// Specjalny przypadek: Rachunki – oprócz własnych transakcji pokaż również transfery "do: Rachunki"
+					whereClause = `WHERE (
+						t.account_id = $1
+						OR t.description = 'Transfer do: Rachunki'
+						OR t.description ILIKE 'Transfer do: Rachunki%'
+					)`
+					queryParams = [accountId]
+					if (monthIdParam) {
+						whereClause += ' AND t.month_id = $2'
+						queryParams.push(monthIdParam)
+					} else if (req.query.year || req.query.month) {
+						const y = parseInt(req.query.year)
+						const m = parseInt(req.query.month)
+						if (!isNaN(y) && !isNaN(m)) {
+							const mres = await client.query('SELECT id FROM months WHERE year = $1 AND month = $2', [y, m])
+							if (mres.rows.length > 0) {
+								const mid = mres.rows[0].id
+								whereClause += ' AND t.month_id = $2'
+								queryParams.push(mid)
+							}
+						}
+					}
+					console.log('[RACHUNKI] whereClause:', whereClause, 'params:', queryParams)
 				} else {
 					// Standard: tylko transakcje danego konta
 					whereClause = 'WHERE t.account_id = $1'
 					queryParams = [accountId]
+
+					// Opcjonalnie zawęź do miesiąca, jeśli klient jawnie go podał
+					if (monthIdParam) {
+						whereClause += ' AND t.month_id = $2'
+						queryParams.push(monthIdParam)
+					} else if (req.query.year || req.query.month) {
+						// Jeśli podano year/month w zapytaniu, spróbuj zamienić na month_id
+						const y = parseInt(req.query.year)
+						const m = parseInt(req.query.month)
+						if (!isNaN(y) && !isNaN(m)) {
+							const mres = await client.query('SELECT id FROM months WHERE year = $1 AND month = $2', [y, m])
+							if (mres.rows.length > 0) {
+								const mid = mres.rows[0].id
+								whereClause += ' AND t.month_id = $2'
+								queryParams.push(mid)
+							}
+						}
+					}
 					console.log('[ACCOUNT] whereClause:', whereClause, 'params:', queryParams)
 				}
 
@@ -288,6 +330,7 @@ const getTransactions = async (req, res) => {
 					extraDescription: transaction.extra_description,
 					extra_description: transaction.extra_description,
 					date: formattedDate,
+					balance_after: transaction.balance_after != null ? Number(transaction.balance_after) : undefined,
 				}
 
 				// Dodaj pola source_account tylko jeśli istnieją
