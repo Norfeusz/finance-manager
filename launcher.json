@@ -1,0 +1,7 @@
+{
+	"backendCmd": "npm start -- --skip-init",
+	"frontendCmd": "npm run dev --prefix ./frontend",
+	"backendPort": 3002,
+	"frontendPort": 5173,
+	"openUrl": "http://localhost:5173"
+}

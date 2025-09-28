@@ -453,33 +453,33 @@ const applyBillsDeduction = async (req, res) => {
 	}
 }
 
-	// Zwraca pełną historię odjęć dla konta "Rachunki"
-	const listAllBillsDeductions = async (req, res) => {
-		const client = await pool.connect()
-		try {
-			const accountId = await getBillsAccountId(client)
-			const r = await client.query(
-				`SELECT id, month_id, amount, deducted_on
+// Zwraca pełną historię odjęć dla konta "Rachunki"
+const listAllBillsDeductions = async (req, res) => {
+	const client = await pool.connect()
+	try {
+		const accountId = await getBillsAccountId(client)
+		const r = await client.query(
+			`SELECT id, month_id, amount, deducted_on
 			     FROM bills_deductions
 			     WHERE account_id = $1
 			     ORDER BY deducted_on ASC, id ASC`,
-				[accountId]
-			)
-			res.json({
-				deductions: r.rows.map(x => ({
-					id: x.id,
-					month_id: x.month_id,
-					amount: Number(x.amount),
-					deducted_on: x.deducted_on,
-				})),
-			})
-		} catch (e) {
-			console.error(e)
-			res.status(500).json({ message: 'Błąd pobierania wszystkich odjęć', error: e.message })
-		} finally {
-			client.release()
-		}
+			[accountId]
+		)
+		res.json({
+			deductions: r.rows.map(x => ({
+				id: x.id,
+				month_id: x.month_id,
+				amount: Number(x.amount),
+				deducted_on: x.deducted_on,
+			})),
+		})
+	} catch (e) {
+		console.error(e)
+		res.status(500).json({ message: 'Błąd pobierania wszystkich odjęć', error: e.message })
+	} finally {
+		client.release()
 	}
+}
 
 module.exports = {
 	getAccountBalances,

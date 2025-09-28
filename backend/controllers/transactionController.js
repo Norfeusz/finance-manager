@@ -6,10 +6,15 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') })
  * Pobiera transakcje z bazy danych PostgreSQL
  */
 const getTransactions = async (req, res) => {
-	console.log('START getTransactions')
+	console.log(
+		'START getTransactions - ALL QUERY PARAMS:',
+		JSON.stringify(req.query),
+		'ROUTE PARAMS:',
+		JSON.stringify(req.params)
+	)
 	try {
-		const year = req.query.year || new Date().getFullYear()
-		const month = req.query.month || new Date().getMonth() + 1
+		const year = req.query.year // Usuń domyślne wartości
+		const month = req.query.month // Usuń domyślne wartości
 		const monthIdParam = req.query.month_id // nowy bezpośredni identyfikator w formacie YYYY-MM
 		const accountName = req.query.account || req.params.accountName
 		console.log(
@@ -116,7 +121,8 @@ const getTransactions = async (req, res) => {
 				])
 
 				const balance = balanceResult.rows.length > 0 ? parseFloat(balanceResult.rows[0].current_balance) : 0
-			} else {
+			} else if (monthIdParam || (year && month)) {
+				// Filtrowanie po miesiącu
 				if (monthIdParam) {
 					// Używamy bezpośrednio tekstowego month_id
 					monthId = monthIdParam
@@ -132,6 +138,11 @@ const getTransactions = async (req, res) => {
 					whereClause = 'WHERE t.month_id = $1'
 					queryParams = [monthId]
 				}
+			} else {
+				// Brak filtrów - zwróć wszystkie transakcje
+				whereClause = ''
+				queryParams = []
+				console.log('[NO FILTERS] Fetching all transactions - no year, no month, no monthId, no accountName')
 			}
 
 			// Najpierw sprawdźmy, czy tabela ma nowe kolumny
@@ -190,8 +201,14 @@ const getTransactions = async (req, res) => {
 			}
 
 			console.log('[QUERY] Executing SQL with whereClause:', whereClause)
+			console.log('[QUERY] Full query:', query)
+			console.log('[QUERY] Query params:', queryParams)
 			const transactionsResult = await client.query(query, queryParams)
 			console.log('[QUERY] Rows returned:', transactionsResult.rows.length)
+			console.log(
+				'[QUERY] First few dates:',
+				transactionsResult.rows.slice(0, 5).map(r => r.date)
+			)
 
 			// Mapowanie kategorii z bazy danych na kategorie frontendu
 			const categoryMapping = {

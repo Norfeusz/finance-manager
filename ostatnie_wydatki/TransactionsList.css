@@ -1,0 +1,250 @@
+/* ===== TRANSACTIONS LIST ===== */
+.transactions-list {
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	overflow: hidden;
+	background: white;
+}
+
+.no-transactions {
+	text-align: center;
+	padding: 40px 20px;
+	color: #666;
+	font-style: italic;
+	background: #f8f9fa;
+	border-radius: 6px;
+	margin: 20px 0;
+}
+
+/* ===== TRANSACTIONS HEADER ===== */
+.transactions-header {
+	display: grid;
+	grid-template-columns: 100px 1fr 80px 120px 120px 100px 80px;
+	gap: 8px;
+	padding: 12px;
+	background: #f8f9fa;
+	border-bottom: 1px solid #ddd;
+	font-weight: bold;
+	font-size: 14px;
+	color: #333;
+	align-items: center;
+}
+
+/* ===== TRANSACTION ITEM ===== */
+.transaction-item {
+	display: grid;
+	grid-template-columns: 100px 1fr 80px 120px 120px 100px 80px;
+	gap: 8px;
+	padding: 12px;
+	border-bottom: 1px solid #eee;
+	align-items: center;
+	transition: background-color 0.2s;
+}
+
+.transaction-item:hover {
+	background: #f8f9fa;
+}
+
+.transaction-item:last-child {
+	border-bottom: none;
+}
+
+/* ===== TRANSACTION TYPES ===== */
+.transaction-income {
+	border-left: 4px solid #28a745;
+}
+
+.transaction-expense {
+	border-left: 4px solid #dc3545;
+}
+
+/* ===== INDIVIDUAL COLUMNS ===== */
+.transaction-date {
+	font-size: 13px;
+	color: #666;
+	text-align: center;
+}
+
+.transaction-description {
+	font-weight: 500;
+	color: #333;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.transaction-type {
+	font-size: 12px;
+	text-align: center;
+	padding: 4px 8px;
+	border-radius: 12px;
+	font-weight: 500;
+}
+
+.transaction-item.transaction-income .transaction-type {
+	background: #d4edda;
+	color: #155724;
+}
+
+.transaction-item.transaction-expense .transaction-type {
+	background: #f8d7da;
+	color: #721c24;
+}
+
+.transaction-category {
+	font-size: 13px;
+	color: #666;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.transaction-account {
+	font-size: 13px;
+	color: #666;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.transaction-amount {
+	font-weight: bold;
+	text-align: right;
+	font-family: monospace;
+}
+
+.balance-positive {
+	color: #28a745;
+}
+
+.balance-negative {
+	color: #dc3545;
+}
+
+/* ===== TRANSACTION ACTIONS ===== */
+.transaction-actions {
+	display: flex;
+	gap: 4px;
+	justify-content: center;
+}
+
+.edit-btn,
+.delete-btn {
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 4px 6px;
+	border-radius: 4px;
+	font-size: 14px;
+	transition: background-color 0.2s;
+}
+
+.edit-btn:hover {
+	background: #e9ecef;
+}
+
+.delete-btn:hover {
+	background: #f8d7da;
+}
+
+.edit-btn:focus,
+.delete-btn:focus {
+	outline: 2px solid #007bff;
+	outline-offset: 1px;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 1200px) {
+	.transactions-header,
+	.transaction-item {
+		grid-template-columns: 90px 1fr 70px 100px 100px 90px 70px;
+		gap: 6px;
+		font-size: 13px;
+	}
+}
+
+@media (max-width: 992px) {
+	.transactions-header,
+	.transaction-item {
+		grid-template-columns: 80px 1fr 60px 90px 80px 80px 60px;
+		gap: 4px;
+		font-size: 12px;
+	}
+}
+
+@media (max-width: 768px) {
+	.transactions-header {
+		display: none; /* Ukryj nagłówek na mobile */
+	}
+	
+	.transaction-item {
+		display: block;
+		padding: 16px;
+		border: 1px solid #ddd;
+		border-radius: 6px;
+		margin-bottom: 8px;
+		background: white;
+	}
+	
+	.transaction-item:hover {
+		background: white;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	}
+	
+	/* Mobile layout - każde pole w nowym wierszu */
+	.transaction-date,
+	.transaction-description,
+	.transaction-type,
+	.transaction-category,
+	.transaction-account,
+	.transaction-amount,
+	.transaction-actions {
+		display: block;
+		text-align: left;
+		margin-bottom: 8px;
+		padding: 0;
+	}
+	
+	.transaction-date::before {
+		content: "Data: ";
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.transaction-description::before {
+		content: "Opis: ";
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.transaction-type::before {
+		content: "Typ: ";
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.transaction-category::before {
+		content: "Kategoria: ";
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.transaction-account::before {
+		content: "Konto: ";
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.transaction-amount::before {
+		content: "Kwota: ";
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.transaction-actions {
+		text-align: center;
+		margin-top: 12px;
+		padding-top: 12px;
+		border-top: 1px solid #eee;
+	}
+}

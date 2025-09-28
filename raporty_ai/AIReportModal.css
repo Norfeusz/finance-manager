@@ -1,0 +1,387 @@
+/* ===== AI REPORT MODAL STYLES ===== */
+.ai-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.7);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 1000;
+	padding: 20px;
+}
+
+.ai-modal-content {
+	background: white;
+	border-radius: 12px;
+	width: 100%;
+	max-width: 800px;
+	max-height: 90vh;
+	overflow-y: auto;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+	animation: ai-modal-appear 0.3s ease-out;
+}
+
+@keyframes ai-modal-appear {
+	from {
+		opacity: 0;
+		transform: scale(0.9);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+/* ===== MODAL HEADER ===== */
+.ai-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 20px 24px;
+	border-bottom: 1px solid #e9ecef;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+	border-radius: 12px 12px 0 0;
+}
+
+.ai-modal-header h2 {
+	margin: 0;
+	font-size: 1.5em;
+	font-weight: 600;
+}
+
+.ai-modal-close-btn {
+	background: rgba(255, 255, 255, 0.2);
+	border: none;
+	color: white;
+	font-size: 24px;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 0.2s;
+}
+
+.ai-modal-close-btn:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+/* ===== MODAL BODY ===== */
+.ai-modal-body {
+	padding: 24px;
+}
+
+/* ===== AI STATUS ===== */
+.ai-status {
+	padding: 12px 16px;
+	border-radius: 8px;
+	margin-bottom: 24px;
+	font-size: 14px;
+	border: 1px solid;
+}
+
+.ai-status-loading {
+	background: #e3f2fd;
+	border-color: #2196f3;
+	color: #1565c0;
+}
+
+.ai-status-connected {
+	background: #e8f5e8;
+	border-color: #4caf50;
+	color: #2e7d32;
+}
+
+.ai-status-error {
+	background: #ffebee;
+	border-color: #f44336;
+	color: #c62828;
+}
+
+.ai-status-not_configured {
+	background: #fff3e0;
+	border-color: #ff9800;
+	color: #ef6c00;
+}
+
+/* ===== FORM ELEMENTS ===== */
+.ai-form-group {
+	margin-bottom: 20px;
+}
+
+.ai-form-group label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 6px;
+	color: #333;
+	font-size: 14px;
+}
+
+.ai-form-select,
+.ai-form-input,
+.ai-form-textarea {
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-size: 14px;
+	transition: border-color 0.2s, box-shadow 0.2s;
+	box-sizing: border-box;
+}
+
+.ai-form-select:focus,
+.ai-form-input:focus,
+.ai-form-textarea:focus {
+	outline: none;
+	border-color: #667eea;
+	box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.ai-form-textarea {
+	resize: vertical;
+	min-height: 80px;
+	font-family: inherit;
+}
+
+.ai-form-hint {
+	display: block;
+	font-size: 12px;
+	color: #666;
+	margin-top: 4px;
+	font-style: italic;
+}
+
+/* ===== BUTTONS ===== */
+.ai-buttons-container {
+	display: flex;
+	gap: 12px;
+	margin: 24px 0;
+	flex-wrap: wrap;
+}
+
+.ai-btn {
+	padding: 10px 20px;
+	border: none;
+	border-radius: 6px;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 44px;
+}
+
+.ai-btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.ai-btn-primary {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+}
+
+.ai-btn-primary:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.ai-btn-success {
+	background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+	color: white;
+}
+
+.ai-btn-success:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(86, 171, 47, 0.3);
+}
+
+.ai-btn-secondary {
+	background: #f8f9fa;
+	color: #495057;
+	border: 1px solid #dee2e6;
+}
+
+.ai-btn-secondary:hover:not(:disabled) {
+	background: #e9ecef;
+	border-color: #adb5bd;
+}
+
+/* ===== REPORT RESULT ===== */
+.ai-report-result {
+	margin-top: 24px;
+	border: 1px solid #e9ecef;
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.ai-report-result h3 {
+	background: #f8f9fa;
+	margin: 0;
+	padding: 16px 20px;
+	border-bottom: 1px solid #e9ecef;
+	font-size: 1.1em;
+	color: #333;
+}
+
+.ai-report-content {
+	padding: 20px;
+	background: white;
+	max-height: 400px;
+	overflow-y: auto;
+	line-height: 1.6;
+}
+
+.ai-report-content p {
+	margin: 0 0 12px 0;
+	color: #333;
+}
+
+.ai-report-content p:last-child {
+	margin-bottom: 0;
+}
+
+.ai-report-content .report-heading {
+	font-weight: 600;
+	color: #2c5aa0;
+	margin-top: 20px;
+	margin-bottom: 8px;
+}
+
+.ai-report-actions {
+	padding: 16px 20px;
+	background: #f8f9fa;
+	border-top: 1px solid #e9ecef;
+}
+
+/* ===== SETUP INSTRUCTIONS ===== */
+.ai-setup-instructions {
+	background: #f8f9fa;
+	border: 1px solid #e9ecef;
+	border-radius: 8px;
+	padding: 20px;
+}
+
+.ai-setup-instructions h3 {
+	margin-top: 0;
+	color: #333;
+}
+
+.ai-setup-instructions ol {
+	padding-left: 20px;
+}
+
+.ai-setup-instructions li {
+	margin-bottom: 8px;
+	line-height: 1.5;
+}
+
+.ai-link {
+	color: #667eea;
+	text-decoration: none;
+	font-weight: 500;
+}
+
+.ai-link:hover {
+	text-decoration: underline;
+}
+
+.ai-code {
+	background: #e9ecef;
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-family: 'Courier New', monospace;
+	font-size: 13px;
+	color: #495057;
+}
+
+.ai-info-box {
+	background: #e3f2fd;
+	border: 1px solid #2196f3;
+	border-radius: 6px;
+	padding: 12px;
+	margin-top: 16px;
+	font-size: 14px;
+	color: #1565c0;
+}
+
+/* ===== ERROR MESSAGE ===== */
+.ai-error-message {
+	background: #ffebee;
+	border: 1px solid #f44336;
+	border-radius: 8px;
+	padding: 20px;
+	text-align: center;
+}
+
+.ai-error-message h3 {
+	margin-top: 0;
+	color: #c62828;
+}
+
+.ai-error-message p {
+	margin-bottom: 16px;
+	color: #d32f2f;
+}
+
+/* ===== MODAL FOOTER ===== */
+.ai-modal-footer {
+	padding: 16px 24px;
+	border-top: 1px solid #e9ecef;
+	background: #f8f9fa;
+	display: flex;
+	justify-content: flex-end;
+	border-radius: 0 0 12px 12px;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+	.ai-modal-overlay {
+		padding: 10px;
+	}
+	
+	.ai-modal-content {
+		max-height: 95vh;
+	}
+	
+	.ai-modal-header,
+	.ai-modal-body,
+	.ai-modal-footer {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+	
+	.ai-buttons-container {
+		flex-direction: column;
+	}
+	
+	.ai-btn {
+		justify-content: center;
+	}
+	
+	.ai-modal-header h2 {
+		font-size: 1.3em;
+	}
+}
+
+@media (max-width: 480px) {
+	.ai-modal-header {
+		padding: 16px;
+	}
+	
+	.ai-modal-body {
+		padding: 16px;
+	}
+	
+	.ai-modal-footer {
+		padding: 12px 16px;
+	}
+}

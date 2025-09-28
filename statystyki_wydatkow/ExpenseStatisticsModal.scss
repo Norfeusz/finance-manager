@@ -1,0 +1,551 @@
+// Styl dla modalu statystyk wydatków
+
+.expense-statistics-modal-backdrop {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: rgba(0, 0, 0, 0.7);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+	padding: 20px;
+	box-sizing: border-box;
+}
+
+.expense-statistics-modal {
+	background: white;
+	border-radius: 12px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+	width: 100%;
+	max-width: 900px;
+	max-height: 90vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+// Nagłówek modalu
+.expense-statistics-header {
+	padding: 20px;
+	border-bottom: 2px solid #e0e0e0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	background: #f8f9fa;
+
+	.month-navigation {
+		display: flex;
+		align-items: center;
+		gap: 15px;
+
+		.nav-button {
+			background: #007bff;
+			color: white;
+			border: none;
+			border-radius: 50%;
+			width: 40px;
+			height: 40px;
+			cursor: pointer;
+			font-size: 18px;
+			font-weight: bold;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: background-color 0.2s;
+
+			&:hover {
+				background: #0056b3;
+			}
+
+			&:active {
+				transform: scale(0.95);
+			}
+		}
+
+		h2 {
+			margin: 0;
+			font-size: 1.5rem;
+			color: #333;
+			font-weight: 600;
+		}
+	}
+
+	.close-button {
+		background: #dc3545;
+		color: white;
+		border: none;
+		border-radius: 50%;
+		width: 35px;
+		height: 35px;
+		cursor: pointer;
+		font-size: 20px;
+		font-weight: bold;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: background-color 0.2s;
+
+		&:hover {
+			background: #c82333;
+		}
+	}
+}
+
+// Podsumowanie statystyk
+.statistics-summary {
+	padding: 20px;
+	display: flex;
+	justify-content: space-around;
+	background: #e9ecef;
+	border-bottom: 1px solid #dee2e6;
+
+	.summary-item {
+		text-align: center;
+
+		.label {
+			display: block;
+			font-size: 0.9rem;
+			color: #666;
+			margin-bottom: 5px;
+		}
+
+		.amount {
+			font-size: 1.2rem;
+			font-weight: bold;
+			color: #dc3545;
+		}
+
+		.count {
+			font-size: 1.2rem;
+			font-weight: bold;
+			color: #007bff;
+		}
+	}
+}
+
+// Akcje globalne
+.global-actions {
+	padding: 15px 20px;
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	background: #f8f9fa;
+	border-bottom: 1px solid #dee2e6;
+
+	.init-button {
+		background: #28a745;
+		color: white;
+		border: none;
+		padding: 8px 16px;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.9rem;
+		transition: background-color 0.2s;
+
+		&:hover {
+			background: #218838;
+		}
+	}
+
+	.toggle-button {
+		border: none;
+		padding: 8px 16px;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.9rem;
+		transition: background-color 0.2s;
+
+		&.open {
+			background: #17a2b8;
+			color: white;
+
+			&:hover {
+				background: #138496;
+			}
+		}
+
+		&.close {
+			background: #6c757d;
+			color: white;
+
+			&:hover {
+				background: #5a6268;
+			}
+		}
+	}
+
+	.add-button {
+		background: #ffc107;
+		color: #212529;
+		border: none;
+		padding: 8px 16px;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.9rem;
+		font-weight: 500;
+		transition: background-color 0.2s;
+
+		&:hover {
+			background: #e0a800;
+		}
+	}
+}
+
+// Formularz dodawania kategorii
+.add-category-form {
+	padding: 15px 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	background: #fff3cd;
+	border-bottom: 1px solid #dee2e6;
+
+	.category-type-selector {
+		display: flex;
+		gap: 15px;
+		margin-bottom: 10px;
+
+		label {
+			display: flex;
+			align-items: center;
+			gap: 5px;
+			font-size: 0.9rem;
+			font-weight: 500;
+			cursor: pointer;
+
+			input[type="radio"] {
+				margin: 0;
+			}
+		}
+	}
+
+	.form-row {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+	}
+
+	input[type="text"] {
+		flex: 1;
+		padding: 8px 12px;
+		border: 1px solid #ced4da;
+		border-radius: 4px;
+		font-size: 0.9rem;
+
+		&:focus {
+			outline: none;
+			border-color: #007bff;
+			box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+		}
+	}
+
+	button {
+		padding: 8px 16px;
+		border: none;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 0.9rem;
+		transition: background-color 0.2s;
+
+		&:first-of-type {
+			background: #28a745;
+			color: white;
+
+			&:hover {
+				background: #218838;
+			}
+		}
+
+		&:last-of-type {
+			background: #6c757d;
+			color: white;
+
+			&:hover {
+				background: #5a6268;
+			}
+		}
+	}
+}
+
+// Lista statystyk
+.statistics-list {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px;
+
+	.category-group {
+		margin-bottom: 30px;
+
+		.category-group-title {
+			font-size: 1.1rem;
+			font-weight: 600;
+			color: #333;
+			margin: 0 0 15px 0;
+			padding: 10px 15px;
+			background: #e9ecef;
+			border-radius: 6px;
+			border-left: 4px solid #007bff;
+		}
+	}
+
+	.empty-state {
+		text-align: center;
+		color: #666;
+		padding: 40px 20px;
+
+		p {
+			margin: 0 0 10px 0;
+			font-size: 1rem;
+
+			&:first-child {
+				font-size: 1.1rem;
+				font-weight: 500;
+				color: #333;
+			}
+		}
+	}
+
+	.statistic-item {
+		display: flex;
+		align-items: center;
+		padding: 15px;
+		margin-bottom: 10px;
+		border-radius: 8px;
+		background: #f8f9fa;
+		border: 2px solid transparent;
+		transition: all 0.2s;
+
+		&.open {
+			border-color: #28a745;
+			background: #d4edda;
+		}
+
+		&.closed {
+			border-color: #dc3545;
+			background: #f8d7da;
+			opacity: 0.7;
+		}
+
+		&.summary-category {
+			background: #d4edda;
+			border: 2px solid #28a745;
+			font-weight: 600;
+			
+			.category-name {
+				font-weight: 700;
+				color: #155724;
+			}
+		}
+
+		&.subcategory {
+			margin-left: 20px;
+			border-left: 3px solid #17a2b8;
+			background: #e2f3f5;
+			
+			.category-name {
+				font-size: 0.95rem;
+			}
+		}
+
+		.category-name {
+			flex: 2;
+			font-weight: 500;
+			color: #333;
+			font-size: 1rem;
+		}
+
+		.amount-section {
+			flex: 1;
+			text-align: center;
+
+			.edit-form {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+
+				input {
+					width: 100px;
+					padding: 5px 8px;
+					border: 1px solid #ced4da;
+					border-radius: 4px;
+					text-align: right;
+					font-size: 0.9rem;
+
+					&:focus {
+						outline: none;
+						border-color: #007bff;
+					}
+				}
+
+				.save-button {
+					background: #28a745;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					width: 30px;
+					height: 30px;
+					cursor: pointer;
+					font-size: 0.9rem;
+
+					&:hover {
+						background: #218838;
+					}
+				}
+
+				.cancel-button {
+					background: #dc3545;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					width: 30px;
+					height: 30px;
+					cursor: pointer;
+					font-size: 0.9rem;
+
+					&:hover {
+						background: #c82333;
+					}
+				}
+			}
+
+			.amount {
+				cursor: pointer;
+				padding: 5px 10px;
+				border-radius: 4px;
+				font-weight: 600;
+				color: #333;
+				transition: background-color 0.2s;
+
+				&:hover {
+					background: rgba(0, 123, 255, 0.1);
+				}
+			}
+		}
+
+		.actions {
+			flex: 1;
+			display: flex;
+			gap: 10px;
+			justify-content: flex-end;
+
+			.status-button {
+				padding: 6px 12px;
+				border: none;
+				border-radius: 4px;
+				cursor: pointer;
+				font-size: 0.8rem;
+				font-weight: 500;
+				transition: background-color 0.2s;
+
+				&.open {
+					background: #28a745;
+					color: white;
+
+					&:hover {
+						background: #218838;
+					}
+				}
+
+				&.closed {
+					background: #dc3545;
+					color: white;
+
+					&:hover {
+						background: #c82333;
+					}
+				}
+			}
+
+			.delete-button {
+				background: transparent;
+				border: none;
+				cursor: pointer;
+				font-size: 1.2rem;
+				padding: 4px;
+				border-radius: 4px;
+				transition: background-color 0.2s;
+
+				&:hover {
+					background: rgba(220, 53, 69, 0.1);
+				}
+			}
+		}
+	}
+}
+
+// Responsywność
+@media (max-width: 768px) {
+	.expense-statistics-modal {
+		width: 95vw;
+		max-height: 95vh;
+		margin: 10px;
+	}
+
+	.expense-statistics-header {
+		padding: 15px;
+
+		.month-navigation {
+			gap: 10px;
+
+			.nav-button {
+				width: 35px;
+				height: 35px;
+				font-size: 16px;
+			}
+
+			h2 {
+				font-size: 1.2rem;
+			}
+		}
+	}
+
+	.statistics-summary {
+		flex-direction: column;
+		gap: 10px;
+
+		.summary-item {
+			.label {
+				font-size: 0.8rem;
+			}
+
+			.amount,
+			.count {
+				font-size: 1rem;
+			}
+		}
+	}
+
+	.global-actions {
+		flex-direction: column;
+		
+		button {
+			width: 100%;
+		}
+	}
+
+	.statistics-list {
+		padding: 15px;
+
+		.statistic-item {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 10px;
+
+			.category-name {
+				text-align: center;
+				font-size: 1.1rem;
+			}
+
+			.amount-section {
+				text-align: center;
+			}
+
+			.actions {
+				justify-content: center;
+			}
+		}
+	}
+}

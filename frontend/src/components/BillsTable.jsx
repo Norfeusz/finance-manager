@@ -184,7 +184,7 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 			}
 		}
 		// Pobierz pełną historię odjęć (wszystkie miesiące) – do widoku historii
-		(async () => {
+		;(async () => {
 			try {
 				const r = await fetch('http://localhost:3002/api/accounts/bills/deductions/all')
 				if (r.ok) {
@@ -298,7 +298,7 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 					description: t.description,
 					amount: amt,
 					delta,
-					balanceAfter: t.balance_after != null ? Number(t.balance_after) : null
+					balanceAfter: t.balance_after != null ? Number(t.balance_after) : null,
 				}
 			})
 
@@ -312,7 +312,7 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 				delta: -Math.abs(Number(d.amount)),
 				balanceAfter: null,
 				_dedId: d.id,
-				_monthId: d.month_id
+				_monthId: d.month_id,
 			}))
 
 			// Jeśli mamy wybrany miesiąc i znane bieżące saldo, ustaw "Saldo po" dla najnowszego odjęcia w tym miesiącu na aktualne saldo konta
@@ -392,11 +392,11 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 
 	// Render historii konta (timeline)
 	const renderTimeline = () => {
-		if (!accountTimeline.length) return null;
+		if (!accountTimeline.length) return null
 		return (
-			<div style={{marginTop: '16px'}}>
+			<div style={{ marginTop: '16px' }}>
 				<h4>Historia konta (wpływy, odjęcia)</h4>
-				<table className="transactions-table">
+				<table className='transactions-table'>
 					<thead>
 						<tr>
 							<th>Data</th>
@@ -409,23 +409,41 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 					<tbody>
 						{accountTimeline.map(ev => (
 							<tr key={`${ev.kind}-${ev.id}`}>
-								<td>{(() => {
-									const s = String(ev.date||'');
-									if (s.includes('T')) return s.split('T')[0].split('-').reverse().join('.');
-									if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.split('-').reverse().join('.');
-									return s;
-								})()}</td>
-								<td>{ev.kind === 'deduction' ? ev.description : (ev.description || 'Transakcja')}</td>
-								<td style={{color: ev.delta >= 0 ? '#137333' : '#d93025'}}>{Number(ev.delta||0).toLocaleString('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2})} zł</td>
-								<td>{ev.balanceAfter == null ? '-' : Number(ev.balanceAfter).toLocaleString('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' zł'}</td>
+								<td>
+									{(() => {
+										const s = String(ev.date || '')
+										if (s.includes('T')) return s.split('T')[0].split('-').reverse().join('.')
+										if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.split('-').reverse().join('.')
+										return s
+									})()}
+								</td>
+								<td>{ev.kind === 'deduction' ? ev.description : ev.description || 'Transakcja'}</td>
+								<td style={{ color: ev.delta >= 0 ? '#137333' : '#d93025' }}>
+									{Number(ev.delta || 0).toLocaleString('pl-PL', {
+										minimumFractionDigits: 2,
+										maximumFractionDigits: 2,
+									})}{' '}
+									zł
+								</td>
+								<td>
+									{ev.balanceAfter == null
+										? '-'
+										: Number(ev.balanceAfter).toLocaleString('pl-PL', {
+												minimumFractionDigits: 2,
+												maximumFractionDigits: 2,
+										  }) + ' zł'}
+								</td>
 								<td>
 									<button
-										className="restore-button"
+										className='restore-button'
 										disabled={ev.balanceAfter == null}
 										onClick={() => restoreBalanceTo(ev.balanceAfter, ev)}
-										title={ev.balanceAfter == null ? 'Brak znanego salda po zdarzeniu' : 'Przywróć saldo do wartości po tym zdarzeniu'}
-										style={{ opacity: ev.balanceAfter == null ? 0.5 : 1 }}
-									>
+										title={
+											ev.balanceAfter == null
+												? 'Brak znanego salda po zdarzeniu'
+												: 'Przywróć saldo do wartości po tym zdarzeniu'
+										}
+										style={{ opacity: ev.balanceAfter == null ? 0.5 : 1 }}>
 										Przywróć saldo
 									</button>
 								</td>
@@ -434,8 +452,8 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 					</tbody>
 				</table>
 			</div>
-		);
-	};
+		)
+	}
 
 	// Zapisywanie danych do localStorage po każdej zmianie
 	useEffect(() => {
@@ -581,7 +599,7 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 					id: saved.id,
 					month_id: selectedMonthId,
 					amount: totalBills,
-					deducted_on: saved.deducted_on || new Date().toISOString()
+					deducted_on: saved.deducted_on || new Date().toISOString(),
 				})
 				return arr
 			})
@@ -701,8 +719,10 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 		if (s.includes('T')) ds = s.split('T')[0].split('-').reverse().join('.')
 		else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) ds = s.split('-').reverse().join('.')
 		else ds = s
-		const name = ev?.kind === 'deduction' ? (ev?.description || 'Odjęcie rachunków') : (ev?.description || 'Transakcja')
-		const confirmed = window.confirm(`Czy na pewno przywrócić saldo konta do ${formatCurrency(targetBalance)}\n(po zdarzeniu: ${name} z dnia ${ds})?`)
+		const name = ev?.kind === 'deduction' ? ev?.description || 'Odjęcie rachunków' : ev?.description || 'Transakcja'
+		const confirmed = window.confirm(
+			`Czy na pewno przywrócić saldo konta do ${formatCurrency(targetBalance)}\n(po zdarzeniu: ${name} z dnia ${ds})?`
+		)
 		if (!confirmed) return
 		const nb = Number(targetBalance)
 		setAccountBalance(nb)
@@ -723,7 +743,6 @@ function BillsTable({ transactions = [], currentBalance = null, selectedMonthId 
 					<span className='balance-amount'>{formatCurrency(accountBalance)}</span>
 				</div>
 			</div>
-
 
 			<div className='bills-actions'>
 				<button
@@ -809,7 +828,6 @@ Szczegóły w konsoli.`)
 					) : (
 						<div>Brak odjęć w tym miesiącu.</div>
 					)}
-
 				</div>
 			)}
 
@@ -940,9 +958,9 @@ Szczegóły w konsoli.`)
 					</div>
 				</div>
 			)}
-		{/* Historia konta: wpływy i odjęcia (pełna oś czasu) — przeniesiona na sam dół modala */}
-		{renderTimeline()}
-	</div>
+			{/* Historia konta: wpływy i odjęcia (pełna oś czasu) — przeniesiona na sam dół modala */}
+			{renderTimeline()}
+		</div>
 	)
 }
 

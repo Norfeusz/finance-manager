@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react'
 import StatisticsDashboard from './components/StatisticsDashboard'
 import DataEntryForm from './components/DataEntryForm'
 import ShoppingStats from './components/ShoppingStats'
+import RecentTransactions from './components/RecentTransactions'
+import AIReportModal from './components/AIReportModal'
 import './App.css'
 import Modal from './components/Modal'
 
 function App() {
 	const [transactions, setTransactions] = useState([])
+	const [allTransactions, setAllTransactions] = useState([]) // Wszystkie transakcje dla RecentTransactions
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState(null)
 	const [refreshKey, setRefreshKey] = useState(0)
@@ -15,6 +18,7 @@ function App() {
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 	})
 	const [months, setMonths] = useState([]) // pełne obiekty
+	const [showAIModal, setShowAIModal] = useState(false)
 
 	// Modal do edycji dwóch kwot wpływów początkowych w jednym oknie
 	const [initialIncomesModal, setInitialIncomesModal] = useState({
@@ -24,6 +28,47 @@ function App() {
 		gabi: '',
 		norf: '',
 	})
+
+	// Funkcje obsługi transakcji dla RecentTransactions
+	const handleEditTransaction = id => {
+		console.log('Edytuj transakcję:', id)
+		// TODO: Implementuj logikę edycji
+		alert('Funkcja edycji będzie dostępna wkrótce')
+	}
+
+	const handleDeleteTransaction = async id => {
+		if (!window.confirm('Czy na pewno chcesz usunąć tę transakcję?')) {
+			return
+		}
+
+		try {
+			const response = await fetch(`http://localhost:3002/api/transactions/${id}`, {
+				method: 'DELETE',
+			})
+
+			if (response.ok) {
+				setRefreshKey(prev => prev + 1)
+				alert('Transakcja została usunięta')
+			} else {
+				throw new Error('Błąd serwera')
+			}
+		} catch (error) {
+			console.error('Błąd:', error)
+			alert('Nie udało się usunąć transakcji')
+		}
+	}
+
+	// Funkcja pobierania wszystkich transakcji dla RecentTransactions
+	const fetchAllTransactions = async () => {
+		try {
+			const response = await fetch('http://localhost:3002/api/transactions')
+			if (!response.ok) throw new Error('Błąd serwera: ' + response.statusText)
+			const data = await response.json()
+			setAllTransactions(data)
+		} catch (err) {
+			console.error('Błąd podczas pobierania wszystkich transakcji:', err)
+		}
+	}
 
 	useEffect(() => {
 		const fetchTransactions = async () => {
@@ -54,6 +99,11 @@ function App() {
 		}
 		fetchTransactions()
 	}, [refreshKey, selectedMonthId])
+
+	// useEffect do pobierania wszystkich transakcji
+	useEffect(() => {
+		fetchAllTransactions()
+	}, [refreshKey])
 
 	const refreshData = () => {
 		setRefreshKey(prevKey => prevKey + 1)
@@ -276,7 +326,7 @@ function App() {
 	return (
 		<div className='App'>
 			<h1>Menadżer Finansów</h1>
-			<div style={{ marginBottom: '1rem' }}>
+			<div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
 				<label>
 					{' '}
 					Miesiąc:
@@ -296,10 +346,25 @@ function App() {
 					</select>
 				</label>
 				{selectedMonthObj?.is_closed && (
-					<span style={{ marginLeft: '1rem', color: '#c00', fontWeight: '600' }}>
-						MIESIĄC ZAMKNIĘTY (statystyki zamrożone)
-					</span>
+					<span style={{ color: '#c00', fontWeight: '600' }}>MIESIĄC ZAMKNIĘTY (statystyki zamrożone)</span>
 				)}
+				<button
+					onClick={() => setShowAIModal(true)}
+					style={{
+						background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+						color: 'white',
+						border: 'none',
+						padding: '12px 24px',
+						borderRadius: '8px',
+						cursor: 'pointer',
+						fontSize: '14px',
+						fontWeight: '600',
+						transition: 'transform 0.2s ease',
+					}}
+					onMouseEnter={e => (e.target.style.transform = 'translateY(-2px)')}
+					onMouseLeave={e => (e.target.style.transform = 'translateY(0px)')}>
+					🤖 Raporty AI dla pary
+				</button>
 			</div>
 			<div className='main-layout'>
 				<div className='form-container'>
@@ -329,6 +394,13 @@ function App() {
 								transactions={transactions}
 								onDataChange={refreshData}
 								selectedMonthId={selectedMonthId}
+							/>
+
+							{/* Ostatnie transakcje */}
+							<RecentTransactions
+								transactions={allTransactions}
+								onEdit={handleEditTransaction}
+								onDelete={handleDeleteTransaction}
 							/>
 						</>
 					)}
@@ -375,6 +447,9 @@ function App() {
 					</div>
 				</div>
 			</Modal>
+
+			{/* AI Report Modal */}
+			<AIReportModal isVisible={showAIModal} onClose={() => setShowAIModal(false)} />
 		</div>
 	)
 }
