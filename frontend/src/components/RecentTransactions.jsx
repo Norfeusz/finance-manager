@@ -25,6 +25,7 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 
 	// Stan dla filtrów
 	const [transactionFilter, setTransactionFilter] = useState('all')
+	const [categoryFilter, setCategoryFilter] = useState('all')
 	const [dateRange, setDateRange] = useState('all')
 	const [customDateFrom, setCustomDateFrom] = useState('')
 	const [customDateTo, setCustomDateTo] = useState('')
@@ -33,6 +34,10 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 	// Stan dla paginacji
 	const [visibleTransactionsCount, setVisibleTransactionsCount] = useState(10)
 	const [itemsPerPage, setItemsPerPage] = useState(10)
+
+	// Stan dla sortowania
+	const [sortBy, setSortBy] = useState('date')
+	const [sortOrder, setSortOrder] = useState('desc') // 'asc' lub 'desc'
 
 	/**
 	 * Funkcja filtrowania transakcji
@@ -43,6 +48,11 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 		// Filtruj po typie
 		if (transactionFilter !== 'all') {
 			filtered = filtered.filter(t => t.type === transactionFilter)
+		}
+
+		// Filtruj po kategorii
+		if (categoryFilter !== 'all') {
+			filtered = filtered.filter(t => t.category === categoryFilter)
 		}
 
 		// Filtruj po opisie (wyszukiwarka)
@@ -106,14 +116,95 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 		setVisibleTransactionsCount(itemsPerPage)
 	}
 
+	// Funkcja sortowania
+	const handleSort = field => {
+		if (sortBy === field) {
+			// Jeśli sortujemy po tym samym polu, zmień kierunek
+			setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+		} else {
+			// Nowe pole - domyślnie malejąco
+			setSortBy(field)
+			setSortOrder('desc')
+		}
+	}
+
+	// Funkcja sortująca transakcje
+	const getSortedTransactions = transactions => {
+		return [...transactions].sort((a, b) => {
+			let valueA, valueB
+
+			switch (sortBy) {
+				case 'date': {
+					// Poprawka sortowania dat - prawidłowe sortowanie chronologiczne
+					const parseDateDDMMYYYY = dateStr => {
+						if (!dateStr) return new Date(0)
+
+						// Sprawdź czy to format DD.MM.YYYY
+						const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+						if (ddmmyyyyMatch) {
+							const [, day, month, year] = ddmmyyyyMatch
+							// Zwróć datę w prawidłowym formacie dla sortowania chronologicznego
+							return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+						}
+
+						// Spróbuj standardowego parsowania
+						return new Date(dateStr)
+					}
+
+					const dateA = parseDateDDMMYYYY(a.date)
+					const dateB = parseDateDDMMYYYY(b.date)
+
+					// Sprawdź czy daty są prawidłowe
+					if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+						// Jeśli daty są nieprawidłowe, sortuj jako string
+						valueA = a.date || ''
+						valueB = b.date || ''
+					} else {
+						valueA = dateA.getTime()
+						valueB = dateB.getTime()
+					}
+					break
+				}
+				case 'description':
+					valueA = (a.description || '').toLowerCase()
+					valueB = (b.description || '').toLowerCase()
+					break
+				case 'account':
+					valueA = (a.account || '').toLowerCase()
+					valueB = (b.account || '').toLowerCase()
+					break
+				case 'amount':
+					valueA = a.amount || 0
+					valueB = b.amount || 0
+					break
+				default:
+					return 0
+			}
+
+			if (sortOrder === 'asc') {
+				if (typeof valueA === 'string' && typeof valueB === 'string') {
+					return valueA.localeCompare(valueB)
+				}
+				return valueA > valueB ? 1 : valueA < valueB ? -1 : 0
+			} else {
+				if (typeof valueA === 'string' && typeof valueB === 'string') {
+					return valueB.localeCompare(valueA)
+				}
+				return valueA < valueB ? 1 : valueA > valueB ? -1 : 0
+			}
+		})
+	}
+
 	const filteredTransactions = getFilteredTransactions()
-	const displayedTransactions = filteredTransactions
-		.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-		.slice(0, visibleTransactionsCount)
+	const sortedTransactions = getSortedTransactions(filteredTransactions)
+	const displayedTransactions = sortedTransactions.slice(0, visibleTransactionsCount)
+
+	// Pobierz unikalne kategorie z wszystkich transakcji
+	const uniqueCategories = [...new Set(transactions.map(t => t.category).filter(Boolean))].sort()
 
 	return (
 		<div className='recent-transactions-container'>
-			<h2>Ostatnie Transakcje</h2>
+			<h2>Transakcje</h2>
 
 			{/* Filtry transakcji */}
 			<div className='transaction-filters'>
@@ -133,6 +224,26 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 						<option value='income'>Tylko przychody</option>
 						<option value='transfer'>Tylko przepływy</option>
 						<option value='debt'>Tylko długi</option>
+					</select>
+				</div>
+
+				{/* Filtr kategorii */}
+				<div className='filter-group'>
+					<label htmlFor='category-filter'>Kategoria:</label>
+					<select
+						id='category-filter'
+						value={categoryFilter}
+						onChange={e => {
+							setCategoryFilter(e.target.value)
+							resetPagination()
+						}}
+						className='filter-select'>
+						<option value='all'>Wszystkie</option>
+						{uniqueCategories.map(category => (
+							<option key={category} value={category}>
+								{category}
+							</option>
+						))}
 					</select>
 				</div>
 
@@ -215,7 +326,14 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 			</div>
 
 			{/* Lista transakcji */}
-			<TransactionsList transactions={displayedTransactions} onEdit={onEdit} onDelete={onDelete} />
+			<TransactionsList
+				transactions={displayedTransactions}
+				onEdit={onEdit}
+				onDelete={onDelete}
+				onSort={handleSort}
+				sortBy={sortBy}
+				sortOrder={sortOrder}
+			/>
 
 			{/* Kontrolki paginacji */}
 			<div className='pagination-controls'>

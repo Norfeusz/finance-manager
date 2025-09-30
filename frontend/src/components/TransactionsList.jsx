@@ -19,8 +19,26 @@ import './TransactionsList.css'
  * @param {Transaction[]} props.transactions - Lista transakcji do wyświetlenia
  * @param {Function} props.onEdit - Funkcja edycji transakcji (id) => void
  * @param {Function} props.onDelete - Funkcja usuwania transakcji (id) => void
+ * @param {Function} props.onSort - Funkcja sortowania (field) => void
+ * @param {string} props.sortBy - Pole według którego sortujemy
+ * @param {string} props.sortOrder - Kierunek sortowania ('asc' lub 'desc')
  */
-export default function TransactionsList({ transactions = [], onEdit, onDelete }) {
+export default function TransactionsList({ transactions = [], onEdit, onDelete, onSort, sortBy, sortOrder }) {
+	// Funkcja obsługi kliknięcia w nagłówek
+	const handleHeaderClick = field => {
+		if (onSort) {
+			onSort(field)
+		}
+	}
+
+	// Funkcja zwracająca ikonę sortowania
+	const getSortIcon = field => {
+		if (sortBy !== field) {
+			return ' ↕️' // Neutralna ikona gdy nie sortujemy po tym polu
+		}
+		return sortOrder === 'asc' ? ' ↑' : ' ↓'
+	}
+
 	if (transactions.length === 0) {
 		return <p className='no-transactions'>Brak transakcji. Dodaj pierwszą transakcję powyżej.</p>
 	}
@@ -28,12 +46,32 @@ export default function TransactionsList({ transactions = [], onEdit, onDelete }
 	return (
 		<div className='transactions-list'>
 			<div className='transactions-header'>
-				<div className='transaction-date'>Data</div>
-				<div className='transaction-description'>Opis</div>
+				<div
+					className='transaction-date sortable-header'
+					onClick={() => handleHeaderClick('date')}
+					title='Sortuj według daty'>
+					Data{getSortIcon('date')}
+				</div>
+				<div
+					className='transaction-description sortable-header'
+					onClick={() => handleHeaderClick('description')}
+					title='Sortuj według opisu'>
+					Opis{getSortIcon('description')}
+				</div>
 				<div className='transaction-type'>Typ</div>
 				<div className='transaction-category'>Kategoria</div>
-				<div className='transaction-account'>Konto</div>
-				<div className='transaction-amount'>Kwota</div>
+				<div
+					className='transaction-account sortable-header'
+					onClick={() => handleHeaderClick('account')}
+					title='Sortuj według konta'>
+					Konto{getSortIcon('account')}
+				</div>
+				<div
+					className='transaction-amount sortable-header'
+					onClick={() => handleHeaderClick('amount')}
+					title='Sortuj według kwoty'>
+					Kwota{getSortIcon('amount')}
+				</div>
 				<div className='transaction-actions'>Akcje</div>
 			</div>
 			{transactions.map((transaction, index) => {

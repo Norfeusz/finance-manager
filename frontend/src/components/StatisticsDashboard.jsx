@@ -15,6 +15,7 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
 	const [accountBalances, setAccountBalances] = useState([])
 	const [currentMonth, setCurrentMonth] = useState(null)
 	const [categoryAverages, setCategoryAverages] = useState({})
+	const [averageExpenses, setAverageExpenses] = useState(null)
 	// SC (saldo całkowite) z KWNR – synchronizowane przez sessionStorage + event z KwnrAccountView
 	const [kwnrSC, setKwnrSC] = useState(() => {
 		try {
@@ -91,6 +92,21 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
 					}
 				}
 
+				// Pobierz średnią wydatków z zamkniętych miesięcy
+				try {
+					const avgExpensesResponse = await fetch('http://localhost:3002/api/statistics/average-expenses')
+					if (avgExpensesResponse.ok) {
+						const avgExpensesData = await avgExpensesResponse.json()
+						setAverageExpenses(avgExpensesData)
+					} else {
+						console.warn('Nie udało się pobrać średniej wydatków')
+						setAverageExpenses(null)
+					}
+				} catch (avgExpErr) {
+					console.warn('Błąd pobierania średniej wydatków:', avgExpErr)
+					setAverageExpenses(null)
+				}
+
 				// budżet wyświetlany pochodzi teraz z transakcji (suma wpływów początkowych)
 			} catch (err) {
 				console.error('Błąd pobierania danych:', err)
@@ -157,7 +173,16 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
 	// % do szerokości paska (maks. 100)
 	const budgetBarPct = Math.min(100, Math.max(0, budgetUsedPctRaw))
 	// Kolor paska wg progów: <75% zielony, 75-100% żółty, >=100% czerwony
-	const budgetBarColor = budgetUsedPctRaw >= 100 ? '#c62828' : budgetUsedPctRaw >= 75 ? '#f9a825' : '#4caf50'
+	// Funkcja do obliczania koloru paska na podstawie procentu
+	const getBarColor = percentage => {
+		if (percentage < 90) return '#4caf50' // Zielony < 90%
+		if (percentage < 100) return '#ffeb3b' // Żółty 90%-100%
+		if (percentage < 110) return '#ff9800' // Pomarańczowy 100%-110%
+		if (percentage < 120) return '#f44336' // Czerwony 110%-120%
+		return '#d32f2f' // Ciemny czerwony > 120%
+	}
+
+	const budgetBarColor = getBarColor(budgetUsedPctRaw)
 
 	// Funkcja pomocnicza do formatowania waluty
 	function formatCurrency(value) {
@@ -751,6 +776,34 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
 								/>
 							</div>
 						</div>
+
+						{/* Pasek porównania ze średnią wydatków */}
+						{averageExpenses && averageExpenses.average > 0 && (
+							<div style={{ margin: '4px 0 12px 0' }}>
+								<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+									<span>Porównanie ze średnią</span>
+									<span>
+										{`${stats.totalExpenses.toFixed(2)} / ${averageExpenses.average.toFixed(2)} PLN (${(
+											(stats.totalExpenses / averageExpenses.average) *
+											100
+										).toFixed(1)}%)`}
+										{stats.totalExpenses > averageExpenses.average &&
+											`, +${((stats.totalExpenses / averageExpenses.average - 1) * 100).toFixed(1)}% ponad średnią`}
+									</span>
+								</div>
+								<div style={{ height: 8, background: '#eee', borderRadius: 4, overflow: 'hidden', marginTop: 4 }}>
+									<div
+										style={{
+											width: `${Math.min((stats.totalExpenses / averageExpenses.average) * 100, 100)}%`,
+											height: '100%',
+											background: getBarColor((stats.totalExpenses / averageExpenses.average) * 100),
+											transition: 'width .3s',
+										}}
+									/>
+								</div>
+							</div>
+						)}
+
 						<div className='highlighted-stat'>
 							<div className='section-title'>
 								<span className='label'>Bilans miesiąca:</span>
@@ -850,7 +903,15 @@ function StatisticsDashboard({ transactions, monthBudget, selectedMonthId }) {
 							title={
 								<div className='section-title'>
 									<span>Suma wydatków:</span>
-									<span className='section-amount'>{formatCurrency(stats.totalExpenses)}</span>
+									<span className='section-amount'>
+										{formatCurrency(stats.totalExpenses)}
+										{averageExpenses && averageExpenses.average > 0 && (
+											<span style={{ fontSize: '0.8em', fontWeight: 'normal', color: '#666' }}>
+												{' '}
+												(śr. {formatCurrency(averageExpenses.average)})
+											</span>
+										)}
+									</span>
 								</div>
 							}>
 							<div className='expense-stats-table'>

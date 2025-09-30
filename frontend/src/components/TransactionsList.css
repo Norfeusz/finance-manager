@@ -30,6 +30,20 @@
 	align-items: center;
 }
 
+/* ===== SORTABLE HEADERS ===== */
+.sortable-header {
+	cursor: pointer;
+	user-select: none;
+	transition: background-color 0.2s, color 0.2s;
+	padding: 4px 6px;
+	border-radius: 4px;
+}
+
+.sortable-header:hover {
+	background-color: #e9ecef;
+	color: #007bff;
+}
+
 /* ===== TRANSACTION ITEM ===== */
 .transaction-item {
 	display: grid;
