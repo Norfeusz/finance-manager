@@ -356,7 +356,15 @@ const TransferFields = () => {
 
 // -- Główny komponent formularza --
 
-function DataEntryForm({ onNewEntry, selectedMonthId, isMonthClosed, onRefresh, onAddMonth, onToggleMonthLock }) {
+function DataEntryForm({
+	onNewEntry,
+	selectedMonthId,
+	isMonthClosed,
+	onRefresh,
+	onAddMonth,
+	onToggleMonthLock,
+	onShowAIModal,
+}) {
 	// informacyjne propsy dostępne niżej (blokada realizowana w części renderowania na dole)
 	const [flowType, setFlowType] = useState('expense')
 	const [mainCategory, setMainCategory] = useState('')
@@ -821,6 +829,17 @@ function DataEntryForm({ onNewEntry, selectedMonthId, isMonthClosed, onRefresh, 
 						</button>
 						<button type='button' className='btn-sm' onClick={() => onToggleMonthLock && onToggleMonthLock()}>
 							{isMonthClosed ? 'Otwórz miesiąc' : 'Zamknij miesiąc'}
+						</button>
+						<button
+							type='button'
+							className='btn-sm'
+							onClick={() => onShowAIModal && onShowAIModal()}
+							style={{
+								background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+								color: 'white',
+								border: 'none',
+							}}>
+							🤖 Raporty AI
 						</button>
 					</div>
 				</div>

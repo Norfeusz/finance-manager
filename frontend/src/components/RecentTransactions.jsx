@@ -203,7 +203,7 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 	const uniqueCategories = [...new Set(transactions.map(t => t.category).filter(Boolean))].sort()
 
 	return (
-		<div className='recent-transactions-container'>
+		<>
 			<h2>Transakcje</h2>
 
 			{/* Filtry transakcji */}
@@ -373,6 +373,6 @@ export default function RecentTransactions({ transactions = [], onEdit, onDelete
 				Wyświetlono {displayedTransactions.length} z {filteredTransactions.length}
 				{filteredTransactions.length !== transactions.length && ` (z ${transactions.length} całości)`}
 			</div>
-		</div>
+		</>
 	)
 }

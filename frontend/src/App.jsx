@@ -323,9 +323,30 @@ function App() {
 		}
 	}
 
+	// Funkcja do formatowania nazwy miesiąca
+	const getMonthDisplayName = monthId => {
+		if (!monthId) return ''
+		const [year, month] = monthId.split('-')
+		const monthNames = [
+			'Styczeń',
+			'Luty',
+			'Marzec',
+			'Kwiecień',
+			'Maj',
+			'Czerwiec',
+			'Lipiec',
+			'Sierpień',
+			'Wrzesień',
+			'Październik',
+			'Listopad',
+			'Grudzień',
+		]
+		return `${monthNames[parseInt(month) - 1]} ${year}`
+	}
+
 	return (
 		<div className='App'>
-			<h1>Menadżer Finansów</h1>
+			<h1>Menadżer Finansów - {getMonthDisplayName(selectedMonthId)}</h1>
 			<div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
 				<label>
 					{' '}
@@ -348,23 +369,6 @@ function App() {
 				{selectedMonthObj?.is_closed && (
 					<span style={{ color: '#c00', fontWeight: '600' }}>MIESIĄC ZAMKNIĘTY (statystyki zamrożone)</span>
 				)}
-				<button
-					onClick={() => setShowAIModal(true)}
-					style={{
-						background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-						color: 'white',
-						border: 'none',
-						padding: '12px 24px',
-						borderRadius: '8px',
-						cursor: 'pointer',
-						fontSize: '14px',
-						fontWeight: '600',
-						transition: 'transform 0.2s ease',
-					}}
-					onMouseEnter={e => (e.target.style.transform = 'translateY(-2px)')}
-					onMouseLeave={e => (e.target.style.transform = 'translateY(0px)')}>
-					🤖 Raporty AI dla pary
-				</button>
 			</div>
 			<div className='main-layout'>
 				<div className='form-container'>
@@ -375,34 +379,41 @@ function App() {
 						onRefresh={() => setRefreshKey(k => k + 1)}
 						onAddMonth={addMonth}
 						onToggleMonthLock={toggleMonthLock}
+						onShowAIModal={() => setShowAIModal(true)}
 					/>
 				</div>
 				<div className='dashboard-container'>
 					{loading && <p className='loading'>Ładowanie danych...</p>}
 					{error && <p style={{ color: 'red' }}>Wystąpił błąd: {error}</p>}
 					{!loading && !error && (
-						<>
-							<StatisticsDashboard
-								transactions={transactions}
-								selectedMonthId={selectedMonthId}
-								isClosed={!!selectedMonthObj?.is_closed}
-								monthBudget={selectedMonthObj?.budget}
-								onAddMonth={addMonth}
-							/>
-							<ShoppingStats
-								refreshKey={refreshKey}
-								transactions={transactions}
-								onDataChange={refreshData}
-								selectedMonthId={selectedMonthId}
-							/>
-
-							{/* Ostatnie transakcje */}
+						<StatisticsDashboard
+							transactions={transactions}
+							selectedMonthId={selectedMonthId}
+							isClosed={!!selectedMonthObj?.is_closed}
+							monthBudget={selectedMonthObj?.budget}
+							onAddMonth={addMonth}
+						/>
+					)}
+				</div>
+				<div className='shopping-stats-container'>
+					{!loading && !error && (
+						<ShoppingStats
+							refreshKey={refreshKey}
+							transactions={transactions}
+							onDataChange={refreshData}
+							selectedMonthId={selectedMonthId}
+						/>
+					)}
+				</div>
+				<div className='recent-transactions-container'>
+					{!loading && !error && (
+						<div className='card'>
 							<RecentTransactions
 								transactions={allTransactions}
 								onEdit={handleEditTransaction}
 								onDelete={handleDeleteTransaction}
 							/>
-						</>
+						</div>
 					)}
 				</div>
 			</div>

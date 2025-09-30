@@ -93,7 +93,7 @@ const getShoppingStats = async (req, res) => {
 			async function getMonthlyData(monthId, resultObject) {
 				if (!monthId) return
 
-				// Pobierz sumy wydatków dla wszystkich kategorii w danym miesiącu
+				// Pobierz sumy wydatków tylko dla kategorii głównych (is_main=true) w danym miesiącu
 				const categoryStatsResult = await client.query(
 					`
                     SELECT 
@@ -106,6 +106,7 @@ const getShoppingStats = async (req, res) => {
                     WHERE 
                         t.month_id = $1 
                         AND t.type = 'expense'
+                        AND c.is_main = true
                     GROUP BY 
                         c.name
                 `,

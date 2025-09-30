@@ -1,419 +1,562 @@
 /* --- Stylowanie listy wpływów --- */
 .income-list-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 0;
-    border-bottom: 1px solid #f0f2f5;
-    font-size: 1rem;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 0;
+	border-bottom: 1px solid #f0f2f5;
+	font-size: 1rem;
 }
 .income-list-item:last-child {
-    border-bottom: none;
+	border-bottom: none;
 }
 .income-label {
-    display: inline-block;
-    font-size: 0.85em;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 12px;
-    margin-right: 6px;
-    letter-spacing: 0.5px;
+	display: inline-block;
+	font-size: 0.85em;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 12px;
+	margin-right: 6px;
+	letter-spacing: 0.5px;
 }
 .income-label.initial {
-    background: #e3f2fd;
-    color: #1976d2;
-    border: 1px solid #90caf9;
+	background: #e3f2fd;
+	color: #1976d2;
+	border: 1px solid #90caf9;
 }
 .income-label.extra {
-    background: #fff3e0;
-    color: #ef6c00;
-    border: 1px solid #ffb74d;
+	background: #fff3e0;
+	color: #ef6c00;
+	border: 1px solid #ffb74d;
 }
 .income-date {
-    color: #888;
-    font-size: 0.95em;
-    margin-right: 4px;
+	color: #888;
+	font-size: 0.95em;
+	margin-right: 4px;
 }
 .income-desc {
-    flex: 1;
-    color: #333;
+	flex: 1;
+	color: #333;
 }
 .income-amount {
-    font-family: monospace;
-    font-weight: 600;
-    color: #388e3c;
-    margin-left: 8px;
+	font-family: monospace;
+	font-weight: 600;
+	color: #388e3c;
+	margin-left: 8px;
 }
 .income-actions {
-    display: flex;
-    gap: 6px;
-    margin-left: 10px;
+	display: flex;
+	gap: 6px;
+	margin-left: 10px;
 }
 .income-actions button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 1.1rem;
-    opacity: 0.6;
-    transition: opacity 0.2s;
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 1.1rem;
+	opacity: 0.6;
+	transition: opacity 0.2s;
 }
 .income-actions button:hover {
-    opacity: 1;
+	opacity: 1;
 }
 /* --- Stylowanie sekcji wyboru advanceType (budżet/zaliczka) --- */
 .advance-type-group {
-    display: flex;
-    flex-direction: column;
-    background: #f7f7fa;
-    border-radius: 8px;
-    padding: 16px 18px 10px 18px;
-    margin: 10px 0 18px 0;
-    border: 1px solid #e0e0e0;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+	display: flex;
+	flex-direction: column;
+	background: #f7f7fa;
+	border-radius: 8px;
+	padding: 16px 18px 10px 18px;
+	margin: 10px 0 18px 0;
+	border: 1px solid #e0e0e0;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 .advance-type-group label {
-    font-weight: 500;
-    margin-bottom: 8px;
-    color: #333;
+	font-weight: 500;
+	margin-bottom: 8px;
+	color: #333;
 }
 .advance-type-options {
-    display: flex;
-    gap: 32px;
-    margin-top: 4px;
+	display: flex;
+	gap: 32px;
+	margin-top: 4px;
 }
-.advance-type-options input[type="radio"] {
-    accent-color: #4f8cff;
-    margin-right: 6px;
+.advance-type-options input[type='radio'] {
+	accent-color: #4f8cff;
+	margin-right: 6px;
 }
 .advance-type-options label {
-    font-weight: 400;
-    color: #444;
-    cursor: pointer;
-    transition: color 0.2s;
+	font-weight: 400;
+	color: #444;
+	cursor: pointer;
+	transition: color 0.2s;
 }
-.advance-type-options input[type="radio"]:checked + span {
-    color: #2563eb;
-    font-weight: 600;
+.advance-type-options input[type='radio']:checked + span {
+	color: #2563eb;
+	font-weight: 600;
 }
 .account-info {
-    display: block;
-    margin-top: 4px;
-    font-size: 0.8em;
-    color: #666;
-    font-style: italic;
+	display: block;
+	margin-top: 4px;
+	font-size: 0.8em;
+	color: #666;
+	font-style: italic;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background-color: #f0f2f5;
-    color: #1c1e21;
-    margin: 0;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+	background-color: #f0f2f5;
+	color: #1c1e21;
+	margin: 0;
 }
 .App {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px;
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 20px;
 }
-h1, h2, h3 {
-    color: #333;
+
+/* Responsywność - dla większych ekranów niż 1599px */
+@media (min-width: 1800px) {
+	.App {
+		max-width: none;
+		width: 100%;
+		padding: 20px;
+	}
 }
+
+h1,
+h2,
+h3 {
+	color: #333;
+}
+
 .main-layout {
-    display: grid;
-    grid-template-columns: 420px 1fr;
-    gap: 30px;
-    align-items: flex-start;
+	display: grid;
+	grid-template-columns: 420px 1fr;
+	gap: 30px;
+	align-items: flex-start;
+}
+
+/* Responsywność - układ 4-kolumnowy dla większych ekranów */
+@media (min-width: 1800px) {
+	.main-layout {
+		grid-template-columns: 320px 1fr 1fr 1.2fr;
+		gap: 20px;
+		align-items: flex-start;
+		height: calc(100vh - 40px);
+		overflow: hidden;
+	}
+
+	.form-container {
+		height: 100%;
+		overflow-y: auto;
+	}
+
+	.dashboard-container {
+		height: 100%;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+
+	.shopping-stats-container {
+		height: 100%;
+		overflow-y: auto;
+	}
+
+	.recent-transactions-container {
+		height: 100%;
+		overflow-y: auto;
+	}
+}
+
+/* Responsywność - układ dla średnich ekranów (tablety) */
+@media (max-width: 1599px) and (min-width: 768px) {
+	.main-layout {
+		grid-template-columns: 1fr;
+		gap: 20px;
+	}
+
+	.dashboard-container {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 20px;
+	}
+
+	.form-container {
+		order: -1;
+	}
+
+	.shopping-stats-container,
+	.recent-transactions-container {
+		grid-column: 1 / -1;
+	}
+}
+
+/* Responsywność - układ dla małych ekranów (mobilne) */
+@media (max-width: 767px) {
+	.App {
+		padding: 10px;
+	}
+
+	.main-layout {
+		grid-template-columns: 1fr;
+		gap: 15px;
+	}
+
+	.dashboard-container {
+		display: flex;
+		flex-direction: column;
+		gap: 15px;
+	}
+
+	.card {
+		padding: 15px;
+	}
 }
 .card {
-    background-color: #fff;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	background-color: #fff;
+	border-radius: 8px;
+	padding: 20px;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
+/* Responsywność - karty dla większych ekranów */
+@media (min-width: 1800px) {
+	.card {
+		height: fit-content;
+		max-height: 100%;
+		overflow-y: auto;
+	}
+
+	.shopping-stats-container .card,
+	.recent-transactions-container .card {
+		height: calc(100vh - 120px);
+		overflow-y: auto;
+	}
+}
+
 .form-card {
-    position: sticky;
-    top: 20px;
+	position: sticky;
+	top: 20px;
+}
+
+/* Responsywność - form-card dla większych ekranów */
+@media (min-width: 1800px) {
+	.form-card {
+		position: static;
+		height: calc(100vh - 120px);
+		overflow-y: auto;
+	}
 }
 
 /* Szybkie akcje w lewej kolumnie */
 .quick-actions {
-    margin-top: 16px;
+	margin-top: 16px;
 }
 .quick-actions .qa-title {
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: #333;
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: #333;
 }
 .quick-actions .qa-buttons {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
 }
 .btn-sm {
-    width: auto;
-    padding: 6px 10px;
-    font-size: 0.85rem;
-    margin-top: 0;
+	width: auto;
+	padding: 6px 10px;
+	font-size: 0.85rem;
+	margin-top: 0;
 }
 .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    margin-bottom: 15px;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	margin-bottom: 15px;
 }
 hr {
-    border: 0;
-    border-top: 1px solid #eee;
-    margin: 20px 0;
+	border: 0;
+	border-top: 1px solid #eee;
+	margin: 20px 0;
 }
 .flow-type {
-    display: flex;
-    justify-content: space-between;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    padding: 5px;
-    margin-bottom: 20px;
+	display: flex;
+	justify-content: space-between;
+	background-color: #e9ecef;
+	border-radius: 8px;
+	padding: 5px;
+	margin-bottom: 20px;
 }
 .flow-type label {
-    flex: 1;
-    text-align: center;
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background-color 0.2s, color 0.2s;
+	flex: 1;
+	text-align: center;
+	padding: 8px 12px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-weight: 500;
+	transition: background-color 0.2s, color 0.2s;
 }
-.flow-type input[type="radio"] {
-    display: none;
+.flow-type input[type='radio'] {
+	display: none;
 }
 .flow-type label.active {
-    background-color: #fff;
-    color: #007bff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+	background-color: #fff;
+	color: #007bff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-label { font-weight: bold; }
-input, select, button, textarea { 
-    padding: 10px; 
-    font-size: 16px; 
-    width: 100%; 
-    box-sizing: border-box; 
-    border-radius: 5px;
-    border: 1px solid #ddd;
-    font-family: inherit;
+label {
+	font-weight: bold;
+}
+input,
+select,
+button,
+textarea {
+	padding: 10px;
+	font-size: 16px;
+	width: 100%;
+	box-sizing: border-box;
+	border-radius: 5px;
+	border: 1px solid #ddd;
+	font-family: inherit;
 }
 textarea {
-    resize: vertical;
+	resize: vertical;
 }
 button {
-    background-color: #28a745; 
-    color: white; 
-    border: none; 
-    cursor: pointer;
-    transition: background-color 0.2s;
-    margin-top: 10px;
+	background-color: #28a745;
+	color: white;
+	border: none;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	margin-top: 10px;
 }
-button:hover { background-color: #218838; }
-#response-message { margin-top: 20px; padding: 10px; border-radius: 5px; text-align: center; }
-.success { background-color: #d4edda; color: #155724; }
-.error { background-color: #f8d7da; color: #721c24; }
+button:hover {
+	background-color: #218838;
+}
+#response-message {
+	margin-top: 20px;
+	padding: 10px;
+	border-radius: 5px;
+	text-align: center;
+}
+.success {
+	background-color: #d4edda;
+	color: #155724;
+}
+.error {
+	background-color: #f8d7da;
+	color: #721c24;
+}
 .dashboard-container {
-    display: flex;
-    flex-direction: column;
-    gap: 30px;
+	display: flex;
+	flex-direction: column;
+	gap: 30px;
+}
+
+/* Responsywność - kontener dashboard dla większych ekranów */
+@media (min-width: 1800px) {
+	.dashboard-container {
+		gap: 20px;
+	}
 }
 .stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 20px;
 }
 .stats-grid .card ul {
-    list-style-type: none;
-    padding: 0;
-    margin-top: 5px;
+	list-style-type: none;
+	padding: 0;
+	margin-top: 5px;
 }
 .stats-grid .card li {
-    padding: 4px 0;
+	padding: 4px 0;
 }
 .collapsible-section {
-    border-top: 1px solid #eee;
-    padding-top: 10px;
-    margin-top: 10px;
+	border-top: 1px solid #eee;
+	padding-top: 10px;
+	margin-top: 10px;
 }
 .collapsible-content ul {
-    padding-left: 20px;
-    list-style-type: disc;
+	padding-left: 20px;
+	list-style-type: disc;
 }
 .loading {
-    font-size: 1.5rem;
-    text-align: center;
-    padding: 40px;
+	font-size: 1.5rem;
+	text-align: center;
+	padding: 40px;
 }
 .shopping-stats .subtitle {
-    font-size: 0.9rem;
-    color: #6c757d;
-    margin-top: -10px;
+	font-size: 0.9rem;
+	color: #6c757d;
+	margin-top: -10px;
 }
 .shopping-stats table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 15px;
 }
-.shopping-stats th, .shopping-stats td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #eee;
+.shopping-stats th,
+.shopping-stats td {
+	padding: 10px;
+	text-align: left;
+	border-bottom: 1px solid #eee;
 }
 .shopping-stats th {
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: #495057;
+	font-weight: 600;
+	font-size: 0.9rem;
+	color: #495057;
 }
 .shopping-stats td:nth-child(2),
 .shopping-stats td:nth-child(3) {
-    text-align: right;
-    font-family: monospace;
-    font-size: 1rem;
+	text-align: right;
+	font-family: monospace;
+	font-size: 1rem;
 }
 .shopping-stats .subcategory {
-    padding-left: 30px !important;
-    font-size: 0.95rem;
+	padding-left: 30px !important;
+	font-size: 0.95rem;
 }
 .shopping-stats .main-category-header td {
-    font-weight: bold;
-    background-color: #f8f9fa;
-    padding-top: 15px;
-    padding-bottom: 5px;
+	font-weight: bold;
+	background-color: #f8f9fa;
+	padding-top: 15px;
+	padding-bottom: 5px;
 }
 .shopping-stats .clickable-amount {
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background-color 0.2s;
+	cursor: pointer;
+	border-radius: 4px;
+	transition: background-color 0.2s;
 }
 .shopping-stats .clickable-amount:hover {
-    background-color: #f0f2f5;
+	background-color: #f0f2f5;
 }
 .clickable-category {
-    cursor: pointer;
-    transition: background-color 0.2s;
-    border-radius: 4px;
-    padding: 4px 8px !important;
-    margin: 2px -8px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-radius: 4px;
+	padding: 4px 8px !important;
+	margin: 2px -8px;
 }
 .clickable-category:hover {
-    background-color: #f0f2f5;
+	background-color: #f0f2f5;
 }
 .transaction-list-item-wrapper {
-    border-bottom: 1px solid #eee;
+	border-bottom: 1px solid #eee;
 }
 .transaction-list-item-wrapper:last-child {
-    border-bottom: none;
+	border-bottom: none;
 }
 .transaction-list-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 8px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 8px;
 }
 .transaction-info .description {
-    font-weight: 500;
+	font-weight: 500;
 }
 .transaction-info .cost {
-    margin-left: 15px;
-    font-family: monospace;
-    color: #dc3545;
+	margin-left: 15px;
+	font-family: monospace;
+	color: #dc3545;
 }
 .transaction-actions button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 1.2rem;
-    padding: 5px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 1.2rem;
+	padding: 5px;
 }
 
 .account-balances {
-    margin-bottom: 20px;
+	margin-bottom: 20px;
 }
 
 .account-balances h3 {
-    margin-top: 0;
-    margin-bottom: 12px;
-    font-size: 1.1rem;
+	margin-top: 0;
+	margin-bottom: 12px;
+	font-size: 1.1rem;
 }
 
 .account-balances table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 15px;
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 15px;
 }
 
 .account-balances table th,
 .account-balances table td {
-    padding: 8px;
-    text-align: left;
-    border-bottom: 1px solid #eee;
+	padding: 8px;
+	text-align: left;
+	border-bottom: 1px solid #eee;
 }
 
 .account-balances table th {
-    background-color: #f5f5f5;
-    font-weight: 600;
+	background-color: #f5f5f5;
+	font-weight: 600;
 }
 
 .account-balances table .current-balance {
-    font-weight: 700;
-    color: #0066cc;
-    cursor: help; /* Zmień kursor na znak zapytania przy najechaniu */
-    border-bottom: 1px dotted #999; /* Dodaj kropkowaną linię pod tekstem, wskazującą na tooltip */
-    position: relative;
+	font-weight: 700;
+	color: #0066cc;
+	cursor: help; /* Zmień kursor na znak zapytania przy najechaniu */
+	border-bottom: 1px dotted #999; /* Dodaj kropkowaną linię pod tekstem, wskazującą na tooltip */
+	position: relative;
 }
 
 .monthly-balance {
-    margin-top: 15px;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
-    font-size: 1.1rem;
+	margin-top: 15px;
+	padding-top: 10px;
+	border-top: 1px solid #eee;
+	font-size: 1.1rem;
 }
 
 .transaction-actions button {
-    width: auto;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-    margin-top: 0;
+	width: auto;
+	opacity: 0.6;
+	transition: opacity 0.2s;
+	margin-top: 0;
 }
 
 .transaction-actions button:hover {
-    opacity: 1;
+	opacity: 1;
 }
 .transaction-full-details {
-    background-color: #f8f9fa;
-    padding: 10px 15px;
-    border-top: 1px dashed #ddd;
+	background-color: #f8f9fa;
+	padding: 10px 15px;
+	border-top: 1px dashed #ddd;
 }
 .transaction-full-details ul {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
+	list-style-type: none;
+	padding: 0;
+	margin: 0;
 }
 .transaction-full-details li {
-    padding: 4px 0;
-    font-size: 0.9rem;
+	padding: 4px 0;
+	font-size: 0.9rem;
 }
 .breakdown-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 15px;
 }
 .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	margin-top: 20px;
 }
 .actions button {
-    width: auto;
+	width: auto;
 }
 .actions button.primary {
-    background-color: #007bff;
-    color: white;
+	background-color: #007bff;
+	color: white;
 }
 .actions button.primary:hover {
-    background-color: #0056b3;
+	background-color: #0056b3;
 }
